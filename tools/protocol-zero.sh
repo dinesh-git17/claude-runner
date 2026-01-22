@@ -75,11 +75,13 @@ EXCLUDE_PATH_PATTERNS=(
     "docs/epics/"
     "docs/design"
     ".github/"
+    ".claude/"
 )
 
 # Files to exclude (governance files that may contain the patterns as documentation)
 EXCLUDE_FILES=(
     "CLAUDE.md"
+    "README.md"
     "protocol-zero.sh"
     "design_doc.md"
 )

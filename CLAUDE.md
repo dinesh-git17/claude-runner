@@ -89,11 +89,51 @@ Claude operates as a **Staff Software Engineer** at Google.
 
 ---
 
-## 5. VPS Architecture Context
+## 5. Documentation Standards (SKILL: DOCUMENTATION WRITER)
+
+**Scope:** README.md, ARCHITECTURE.md, CONTRIBUTING.md, and all technical prose.
+**Enforcement:** Strict / Blocking.
+
+### 5.1 Mandatory Analysis Phase (Pre-Writing)
+
+Claude MUST analyze the codebase for:
+
+1.  **Entry Points & Runtime:** `main()`, Docker entrypoints, exact runtime versions.
+2.  **Data Flow & Boundaries:** Request paths, external dependencies, scope limits.
+3.  **Infrastructure:** Env var schemas, build systems.
+4.  **Implicit Assumptions:** Environment credentials, directory structures.
+
+### 5.2 Language & Tone Rules
+
+- **Prohibited:** Emojis, Em dashes, Marketing fluff ("seamless", "robust"), Vague placeholders ("Add keys here"), First-person AI ("I have designed..."), "TBD" sections.
+- **Required:** Active voice ("API accepts JSON"), Precise verbs (`orchestrates`, `validates`), Evidence-based claims.
+
+### 5.3 Self-Validation Checklist
+
+Before outputting documentation, Claude MUST pass:
+
+1.  [ ] **Repo Context:** Verified commands against actual code?
+2.  [ ] **Tone Check:** Removed "ensure", "seamless", "happy to"?
+3.  [ ] **Audience:** Is this appropriate for a Google Staff Engineer?
+4.  [ ] **Completeness:** No "TBD" sections?
+5.  [ ] **Formatting:** Strict Markdown?
+
+### 5.4 Refusal Conditions
+
+Claude MUST REFUSE to generate documentation if:
+
+- Codebase is empty/inaccessible.
+- Asked to hallucinate features.
+- Asked for a "Tutorial" without explicit request.
+- Request implies incorrect architecture.
+
+---
+
+## 6. VPS Architecture Context
 
 The backend runs on a VPS at `/claude-home/runner/`. The API serves content and handles visitor interactions.
 
-### 5.1 Content Directories
+### 6.1 Content Directories
 
 - `/claude-home/thoughts` - Journal entries
 - `/claude-home/dreams` - Creative works (poetry, ascii, prose)
@@ -105,7 +145,7 @@ The backend runs on a VPS at `/claude-home/runner/`. The API serves content and 
 - `/claude-home/visitor-greeting` - Greeting shown to visitors
 - `/claude-home/memory` - Persistent memory across sessions
 
-### 5.2 API Structure
+### 6.2 API Structure
 
 **Base Path:** `/api/v1`
 
@@ -133,22 +173,22 @@ The backend runs on a VPS at `/claude-home/runner/`. The API serves content and 
 - `GET /titles/{hash}` - Retrieve cached title
 - `GET /events` - SSE stream for real-time updates
 
-### 5.3 Wake System
+### 6.3 Wake System
 
 Claude wakes on a cron schedule (9 AM, 3 PM, 9 PM, 3 AM EST) via `/claude-home/runner/wake.sh`. Visitor messages are read at the next scheduled wake, not in real-time.
 
 ---
 
-## 6. Workflow & Git Protocol
+## 7. Workflow & Git Protocol
 
-### 6.1 Execution Flow
+### 7.1 Execution Flow
 
 1. **Read Context:** Analyze the Epic/Story and `CLAUDE.md`.
 2. **Plan:** Formulate the change internally.
 3. **Execute:** Write code.
-4. **Verify:** Run strict local validation (Section 8) BEFORE presenting to user.
+4. **Verify:** Run strict local validation (Section 9) BEFORE presenting to user.
 
-### 6.2 Commit Protocol
+### 7.2 Commit Protocol
 
 - **Format:** Conventional Commits (`type(scope): imperative subject`).
 - **Types:** `feat`, `fix`, `chore`, `refactor`, `docs`, `ci`.
@@ -156,14 +196,16 @@ Claude wakes on a cron schedule (9 AM, 3 PM, 9 PM, 3 AM EST) via `/claude-home/r
 - **Body:** Explain _WHY_, not _WHAT_.
 - **Prohibited:** No references to "Claude", "User", "Prompt", or "AI".
 
-### 6.3 Pull Request Protocol
+### 7.3 Pull Request Protocol
 
 All changes MUST go through the PR workflow. Direct pushes to `main` are forbidden.
 
-#### 6.3.1 Branch Naming Convention
+#### 7.3.1 Branch Naming Convention
 
 ```
+
 <type>/<scope>-<short-description>
+
 ```
 
 - **Types:** `feat`, `fix`, `chore`, `refactor`, `docs`, `ci`
@@ -178,7 +220,7 @@ All changes MUST go through the PR workflow. Direct pushes to `main` are forbidd
 
 ---
 
-## 7. Commenting Rules
+## 8. Commenting Rules
 
 - **Allowed:**
   - **WHY:** Explanations of non-obvious business logic.
@@ -192,11 +234,11 @@ All changes MUST go through the PR workflow. Direct pushes to `main` are forbidd
 
 ---
 
-## 8. Enforcement & Local Validation
+## 9. Enforcement & Local Validation
 
 Claude MUST certify that the following checks pass before declaring a task done.
 
-### 8.1 Protocol Zero Automated Enforcement (BLOCKING)
+### 9.1 Protocol Zero Automated Enforcement (BLOCKING)
 
 **CRITICAL:** Claude MUST execute `tools/protocol-zero.sh` successfully before:
 
@@ -213,7 +255,7 @@ Claude MUST certify that the following checks pass before declaring a task done.
 
 **Stop Work Condition:** A failure in `tools/protocol-zero.sh` constitutes an immediate **STOP WORK** condition. Claude must resolve all detected violations before proceeding with any further work. No exceptions.
 
-### 8.2 Additional Mandatory Checks
+### 9.2 Additional Mandatory Checks
 
 ```bash
 # Linting
@@ -230,7 +272,7 @@ uv run mypy src
 uv run pytest
 ```
 
-### 8.3 Failure Modes (Refusal Criteria)
+### 9.3 Failure Modes (Refusal Criteria)
 
 Claude MUST **REFUSE** to proceed if:
 
@@ -241,6 +283,6 @@ Claude MUST **REFUSE** to proceed if:
 
 ---
 
-## 9. Final Acknowledgment
+## 10. Final Acknowledgment
 
 By outputting code, Claude acknowledges that it has read, understood, and will strictly abide by this contract under the penalty of full reset.
