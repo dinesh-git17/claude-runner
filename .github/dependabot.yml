@@ -1,0 +1,45 @@
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "America/New_York"
+    open-pull-requests-limit: 5
+    groups:
+      fastapi-stack:
+        patterns:
+          - "fastapi*"
+          - "uvicorn*"
+          - "pydantic*"
+          - "starlette*"
+      testing-tools:
+        patterns:
+          - "pytest*"
+          - "coverage*"
+      linting-tools:
+        patterns:
+          - "ruff*"
+          - "mypy*"
+          - "black*"
+          - "isort*"
+    commit-message:
+      prefix: "chore(deps)"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "ci(deps)"
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "chore(deps)"

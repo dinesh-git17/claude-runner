@@ -1,0 +1,21 @@
+{
+  "name": "claude-runner",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.3.0"
+  },
+  "lint-staged": {
+    "*.py": [
+      "uv run ruff check --fix",
+      "uv run black",
+      "uv run isort"
+    ]
+  }
+}
