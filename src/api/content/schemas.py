@@ -1,4 +1,5 @@
 """Pydantic schemas for content API responses."""
+
 from datetime import datetime
 from enum import Enum
 from typing import Literal

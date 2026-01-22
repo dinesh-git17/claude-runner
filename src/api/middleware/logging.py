@@ -1,7 +1,7 @@
 """Request logging middleware."""
+
 import time
-from collections.abc import Callable
-from typing import Awaitable
+from collections.abc import Awaitable, Callable
 
 import structlog
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -10,10 +10,12 @@ from starlette.responses import Response
 
 logger = structlog.get_logger()
 
-EXCLUDED_PATHS = frozenset({
-    "/api/v1/health/live",
-    "/api/v1/health/ready",
-})
+EXCLUDED_PATHS = frozenset(
+    {
+        "/api/v1/health/live",
+        "/api/v1/health/ready",
+    }
+)
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):

@@ -1,16 +1,18 @@
 """API key authentication middleware."""
+
 import secrets
-from collections.abc import Callable
-from typing import Awaitable
+from collections.abc import Awaitable, Callable
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-PUBLIC_PATHS = frozenset({
-    "/api/v1/health/live",
-    "/api/v1/health/ready",
-})
+PUBLIC_PATHS = frozenset(
+    {
+        "/api/v1/health/live",
+        "/api/v1/health/ready",
+    }
+)
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
@@ -26,7 +28,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             app: ASGI application.
             api_key: Expected API key value.
         """
-        super().__init__(app)
+        super().__init__(app)  # type: ignore[arg-type]
         self._api_key = api_key
 
     async def dispatch(

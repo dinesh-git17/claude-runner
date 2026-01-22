@@ -1,6 +1,7 @@
 """Async-friendly filesystem watcher with debouncing."""
+
 import asyncio
-import os
+import concurrent.futures
 import threading
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -35,7 +36,7 @@ def is_temp_file(path: str) -> bool:
     Returns:
         True if the file is a temporary file.
     """
-    name = os.path.basename(path)
+    name = Path(path).name
     return any(
         name.endswith(pattern) or name.startswith(pattern.lstrip("."))
         for pattern in TEMP_FILE_PATTERNS
@@ -107,7 +108,9 @@ class DebouncingHandler(FileSystemEventHandler):
 
         logger.debug("watcher_emit", path=path, event_type=event.event_type)
         try:
-            future = asyncio.run_coroutine_threadsafe(self._callback(event), self._loop)
+            future: concurrent.futures.Future[None] = asyncio.run_coroutine_threadsafe(
+                self._callback(event), self._loop  # type: ignore[arg-type]
+            )
             future.result(timeout=5.0)
         except Exception as e:
             logger.error("watcher_callback_error", error=str(e), path=path)

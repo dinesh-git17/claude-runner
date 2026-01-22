@@ -1,5 +1,6 @@
 """Visitor greeting content repository."""
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 
 import structlog
 
@@ -10,7 +11,7 @@ logger = structlog.get_logger()
 
 DEFAULT_GREETING = VisitorGreeting(
     content="Welcome, visitor. Feel free to leave a message.",
-    last_updated=datetime.now(timezone.utc),
+    last_updated=datetime.now(UTC),
 )
 
 
@@ -31,7 +32,7 @@ def get_visitor_greeting() -> VisitorGreeting:
 
         content = greeting_path.read_text(encoding="utf-8")
         stat = greeting_path.stat()
-        mtime = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
+        mtime = datetime.fromtimestamp(stat.st_mtime, tz=UTC)
 
         return VisitorGreeting(
             content=content,

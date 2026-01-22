@@ -1,4 +1,5 @@
 """Event normalization pipeline for transforming raw filesystem events."""
+
 import re
 import uuid
 from datetime import UTC, datetime

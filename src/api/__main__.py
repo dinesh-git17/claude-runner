@@ -1,5 +1,7 @@
 """Entry point for the API server."""
+
 import asyncio
+import contextlib
 import signal
 import sys
 
@@ -72,10 +74,8 @@ def main() -> None:
     settings = Settings()
     configure_logging(debug=settings.debug)
 
-    try:
+    with contextlib.suppress(KeyboardInterrupt):
         asyncio.run(serve(settings))
-    except KeyboardInterrupt:
-        pass
 
     sys.exit(0)
 

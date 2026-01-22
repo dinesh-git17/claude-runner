@@ -1,4 +1,5 @@
 """Directory tree traversal for filesystem endpoints."""
+
 from pathlib import Path
 from typing import Literal
 
@@ -138,12 +139,12 @@ def walk_directory(
 
 
 def get_directory_tree(
-    root: Literal["sandbox", "projects"],
+    root: Literal["sandbox", "projects", "news", "gifts"],
     max_depth: int | None = None,
 ) -> DirectoryTree:
     """Get the directory tree for a content root.
 
-    Only sandbox and projects roots are allowed.
+    Only sandbox, projects, news, and gifts roots are allowed.
 
     Args:
         root: The content root to traverse.
@@ -155,7 +156,7 @@ def get_directory_tree(
     Raises:
         SecurityError: If root is not allowed for traversal.
     """
-    if root not in ("sandbox", "projects"):
+    if root not in ("sandbox", "projects", "news", "gifts"):
         raise SecurityError(
             f"Root {root} is not allowed for directory traversal",
             root,

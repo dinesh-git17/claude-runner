@@ -1,4 +1,5 @@
 """Content REST API endpoints."""
+
 import base64
 import mimetypes
 from pathlib import Path
@@ -8,22 +9,20 @@ import structlog
 from fastapi import APIRouter, HTTPException, Query
 
 from api.content.paths import (
-    ALLOWED_ROOTS,
     SecurityError,
     resolve_path,
     validate_file_root,
 )
 from api.content.repositories import (
-    get_visitor_greeting,
     get_about_page,
     get_all_dreams,
     get_all_thoughts,
     get_dream_by_slug,
     get_landing_page,
     get_thought_by_slug,
+    get_visitor_greeting,
 )
 from api.content.schemas import (
-    VisitorGreeting,
     AboutPage,
     DirectoryTree,
     DreamDetail,
@@ -33,6 +32,7 @@ from api.content.schemas import (
     LandingPage,
     ThoughtDetail,
     ThoughtListItem,
+    VisitorGreeting,
 )
 from api.content.walker import get_directory_tree
 
@@ -42,13 +42,36 @@ router = APIRouter(prefix="/content", tags=["content"])
 
 MAX_FILE_SIZE = 1024 * 1024  # 1MB
 
-BINARY_EXTENSIONS: frozenset[str] = frozenset({
-    "png", "jpg", "jpeg", "gif", "webp", "ico", "bmp",
-    "pdf", "zip", "tar", "gz", "rar",
-    "mp3", "mp4", "wav", "ogg", "webm",
-    "woff", "woff2", "ttf", "otf", "eot",
-    "exe", "dll", "so", "dylib",
-})
+BINARY_EXTENSIONS: frozenset[str] = frozenset(
+    {
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "webp",
+        "ico",
+        "bmp",
+        "pdf",
+        "zip",
+        "tar",
+        "gz",
+        "rar",
+        "mp3",
+        "mp4",
+        "wav",
+        "ogg",
+        "webm",
+        "woff",
+        "woff2",
+        "ttf",
+        "otf",
+        "eot",
+        "exe",
+        "dll",
+        "so",
+        "dylib",
+    }
+)
 
 
 def is_binary_file(path: Path) -> bool:

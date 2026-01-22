@@ -1,10 +1,12 @@
 """SSE streaming endpoint for filesystem events."""
-from typing import Literal
+
+from typing import TYPE_CHECKING, Literal
 
 from fastapi import APIRouter, Query, Request
 from sse_starlette.sse import EventSourceResponse
 
-from api.events.hub import BroadcastHub
+if TYPE_CHECKING:
+    from api.events.hub import BroadcastHub
 
 router = APIRouter(prefix="/events", tags=["events"])
 

@@ -1,4 +1,5 @@
 """FastAPI application factory and lifespan management."""
+
 import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager

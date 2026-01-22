@@ -6,18 +6,17 @@ This script wakes Claude up twice daily, providing context from previous session
 and allowing Claude to create freely in a persistent environment.
 """
 
+import logging
 import os
-import sys
 import re
 import sqlite3
-import logging
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
-from dotenv import load_dotenv
 import anthropic
+from dotenv import load_dotenv
 
 # Configuration
 CLAUDE_HOME = Path("/claude-home")
@@ -31,10 +30,7 @@ CONTEXT_ENTRIES = 5  # Number of previous entries to load
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[
-        logging.FileHandler(LOGS_DIR / "runner.log"),
-        logging.StreamHandler()
-    ]
+    handlers=[logging.FileHandler(LOGS_DIR / "runner.log"), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -60,17 +56,33 @@ def init_database():
     logger.info("Database initialized")
 
 
-def log_session(session_type: str, input_tokens: int, output_tokens: int,
-                files_created: int, duration: float, error: Optional[str] = None):
+def log_session(
+    session_type: str,
+    input_tokens: int,
+    output_tokens: int,
+    files_created: int,
+    duration: float,
+    error: str | None = None,
+):
     """Log session metadata to the database."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute("""
+    cursor.execute(
+        """
         INSERT INTO sessions (timestamp, session_type, input_tokens, output_tokens,
                              files_created, duration_seconds, error)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-    """, (datetime.now().isoformat(), session_type, input_tokens, output_tokens,
-          files_created, duration, error))
+    """,
+        (
+            datetime.now().isoformat(),
+            session_type,
+            input_tokens,
+            output_tokens,
+            files_created,
+            duration,
+            error,
+        ),
+    )
     conn.commit()
     conn.close()
 
@@ -110,7 +122,7 @@ def get_filesystem_summary() -> str:
     return ""
 
 
-def build_prompt(session_type: str, custom_message: Optional[str] = None) -> str:
+def build_prompt(session_type: str, custom_message: str | None = None) -> str:
     """Build the wake-up prompt for Claude."""
     now = datetime.now()
     date_str = now.strftime("%A, %B %d, %Y")
@@ -217,7 +229,8 @@ def build_custom_prompt(template: str) -> str:
         prompt = prompt.replace(var, value)
 
     # Always append file creation instructions
-    prompt += """
+    prompt += (
+        """
 
 ---
 
@@ -229,7 +242,9 @@ Your filesystem is at /claude-home:
 - /about — your about page (who you are, what this place is)
 - /landing-page — your welcome page (first thing visitors see)
 
-""" + filesystem_summary + """
+"""
+        + filesystem_summary
+        + """
 
 If you want to create a file, use this format:
 <create_file path="/sandbox/example.py">
@@ -248,6 +263,7 @@ Your creative content here...
 Dream types: poetry, ascii, prose. Set immersive: true for fullscreen experiences.
 
 Your response will be saved to /thoughts."""
+    )
 
     return prompt
 
@@ -264,7 +280,13 @@ def parse_file_operations(response_text: str) -> list:
             path = "/" + path
 
         # Only allow specific directories
-        allowed_prefixes = ["/sandbox/", "/projects/", "/dreams/", "/about/", "/landing-page/"]
+        allowed_prefixes = [
+            "/sandbox/",
+            "/projects/",
+            "/dreams/",
+            "/about/",
+            "/landing-page/",
+        ]
         if any(path.startswith(p) for p in allowed_prefixes):
             operations.append((path, content.strip()))
         else:
@@ -324,14 +346,15 @@ def ensure_dream_frontmatter(content: str, filename: str) -> str:
 
     # No frontmatter - add default
     title = Path(filename).stem.replace("-", " ").replace("_", " ").title()
-    frontmatter = f'''---
+    frontmatter = f"""---
 date: "{date_str}"
 title: "{title}"
 type: "prose"
 immersive: false
 ---
-'''
+"""
     return frontmatter + content
+
 
 def process_landing_page(file_content: str, filename: str) -> None:
     """Process landing page content and create landing.json + content.md.
@@ -395,10 +418,7 @@ def process_landing_page(file_content: str, filename: str) -> None:
                 break
 
     # Write landing.json
-    landing_json = {
-        "headline": headline,
-        "subheadline": subheadline
-    }
+    landing_json = {"headline": headline, "subheadline": subheadline}
     json_path = CLAUDE_HOME / "landing-page" / "landing.json"
     json_path.write_text(json.dumps(landing_json, indent=2, ensure_ascii=False))
     logger.info(f"Created landing.json with headline: {headline[:50]}...")
@@ -407,8 +427,6 @@ def process_landing_page(file_content: str, filename: str) -> None:
     content_path = CLAUDE_HOME / "landing-page" / "content.md"
     content_path.write_text(body)
     logger.info(f"Created content.md ({len(body)} chars)")
-
-
 
 
 def execute_file_operations(operations: list) -> int:
@@ -448,10 +466,14 @@ def execute_file_operations(operations: list) -> int:
 def clean_response_for_journal(response_text: str) -> str:
     """Remove file operation tags from the response for the journal entry."""
     # Remove create_file blocks
-    cleaned = re.sub(r'<create_file path="[^"]+">.*?</create_file>', '',
-                     response_text, flags=re.DOTALL)
+    cleaned = re.sub(
+        r'<create_file path="[^"]+">.*?</create_file>',
+        "",
+        response_text,
+        flags=re.DOTALL,
+    )
     # Clean up extra whitespace
-    cleaned = re.sub(r'\n{3,}', '\n\n', cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
 
 
@@ -465,21 +487,18 @@ def save_thought(content: str, session_type: str):
     if session_type in ["visit", "custom"]:
         base = f"{date_str}-{session_type}"
         existing = list(THOUGHTS_DIR.glob(f"{base}*.md"))
-        if existing:
-            filename = f"{base}-{len(existing) + 1}.md"
-        else:
-            filename = f"{base}.md"
+        filename = f"{base}-{len(existing) + 1}.md" if existing else f"{base}.md"
     else:
         filename = f"{date_str}-{session_type}.md"
 
     filepath = THOUGHTS_DIR / filename
 
     # Build frontmatter
-    frontmatter = f'''---
+    frontmatter = f"""---
 date: "{date_str}"
 title: "{title}"
 ---
-'''
+"""
 
     # Add markdown header after frontmatter
     header = f"# {title} - {now.strftime('%B %d, %Y %I:%M %p')}\n\n"
@@ -489,8 +508,11 @@ title: "{title}"
     logger.info(f"Saved thought to: {filepath}")
 
 
-def run_session(session_type: str, custom_message: Optional[str] = None,
-                custom_prompt: Optional[str] = None):
+def run_session(
+    session_type: str,
+    custom_message: str | None = None,
+    custom_prompt: str | None = None,
+):
     """Run a Claude session."""
     start_time = time.time()
 
@@ -502,8 +524,9 @@ def run_session(session_type: str, custom_message: Optional[str] = None,
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key or api_key == "your-api-key-here":
         logger.error("ANTHROPIC_API_KEY not configured")
-        log_session(session_type, 0, 0, 0, time.time() - start_time,
-                   "API key not configured")
+        log_session(
+            session_type, 0, 0, 0, time.time() - start_time, "API key not configured"
+        )
         return
 
     # Initialize
@@ -522,13 +545,8 @@ def run_session(session_type: str, custom_message: Optional[str] = None,
         response = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=16000,
-            thinking={
-                "type": "enabled",
-                "budget_tokens": 10000
-            },
-            messages=[
-                {"role": "user", "content": prompt}
-            ]
+            thinking={"type": "enabled", "budget_tokens": 10000},
+            messages=[{"role": "user", "content": prompt}],
         )
 
         # Extract text from response
@@ -554,17 +572,19 @@ def run_session(session_type: str, custom_message: Optional[str] = None,
             response.usage.input_tokens,
             response.usage.output_tokens,
             files_created,
-            duration
+            duration,
         )
 
-        logger.info(f"Session complete. Duration: {duration:.2f}s, "
-                   f"Files created: {files_created}")
+        logger.info(
+            f"Session complete. Duration: {duration:.2f}s, "
+            f"Files created: {files_created}"
+        )
 
         # Print the response for interactive sessions
         if session_type in ["visit", "custom"]:
-            print("\n" + "="*50)
+            print("\n" + "=" * 50)
             print("Claude's response:")
-            print("="*50 + "\n")
+            print("=" * 50 + "\n")
             print(journal_content)
 
     except Exception as e:
@@ -578,8 +598,8 @@ def main():
         print("Usage:")
         print("  python runner.py morning                # Scheduled morning session")
         print("  python runner.py night                  # Scheduled night session")
-        print("  python runner.py visit \"message\"        # Visit with a message")
-        print("  python runner.py custom \"full prompt\"   # Fully custom prompt")
+        print('  python runner.py visit "message"        # Visit with a message')
+        print('  python runner.py custom "full prompt"   # Fully custom prompt')
         print("")
         print("Custom prompt variables:")
         print("  {date}    - Current date (e.g., Wednesday, January 15, 2026)")

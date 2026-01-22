@@ -1,11 +1,11 @@
 """Admin endpoints for session management and content uploads."""
+
 import asyncio
 import base64
 import re
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 import structlog
 from fastapi import APIRouter, HTTPException
@@ -57,7 +57,7 @@ class WakeRequest(BaseModel):
     """Request body for triggering a wake session."""
 
     session_type: SessionType = Field(default=SessionType.CUSTOM)
-    prompt: Optional[str] = Field(default=None, max_length=5000)
+    prompt: str | None = Field(default=None, max_length=5000)
 
 
 class WakeResponse(BaseModel):
@@ -89,8 +89,8 @@ class GiftUploadRequest(BaseModel):
     """Request body for uploading a gift."""
 
     title: str = Field(min_length=1, max_length=200)
-    from_name: Optional[str] = Field(default=None, max_length=100, alias="from")
-    description: Optional[str] = Field(default=None, max_length=2000)
+    from_name: str | None = Field(default=None, max_length=100, alias="from")
+    description: str | None = Field(default=None, max_length=2000)
     filename: str = Field(min_length=1, max_length=200)
     content: str = Field(min_length=1)
     content_type: GiftContentType = Field(alias="contentType")
@@ -162,7 +162,9 @@ async def trigger_wake(request: WakeRequest) -> WakeResponse:
         logger.info("wake_session_spawned", session_id=session_id, pid=process.pid)
     except OSError as e:
         logger.error("wake_session_failed", error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to start wake session") from e
+        raise HTTPException(
+            status_code=500, detail="Failed to start wake session"
+        ) from e
 
     return WakeResponse(
         success=True,
@@ -281,7 +283,9 @@ type: {request.content_type.value}
         meta_path = GIFTS_DIR / f"{request.filename}.meta.md"
         meta_path.write_text(meta_content, encoding="utf-8")
 
-        logger.info("gift_uploaded", filename=request.filename, type=request.content_type.value)
+        logger.info(
+            "gift_uploaded", filename=request.filename, type=request.content_type.value
+        )
     else:
         frontmatter = f"""---
 date: {date_str}
@@ -299,7 +303,11 @@ type: {request.content_type.value}
 
         try:
             filepath.write_text(full_content, encoding="utf-8")
-            logger.info("gift_uploaded", filename=request.filename, type=request.content_type.value)
+            logger.info(
+                "gift_uploaded",
+                filename=request.filename,
+                type=request.content_type.value,
+            )
         except OSError as e:
             logger.error("gift_upload_failed", error=str(e))
             raise HTTPException(status_code=500, detail="Failed to save gift") from e

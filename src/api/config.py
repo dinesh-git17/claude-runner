@@ -1,4 +1,5 @@
 """API configuration loaded from environment variables."""
+
 from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -41,7 +42,7 @@ class Settings(BaseSettings):
     sse_heartbeat_interval: float = 15.0
     watch_paths_raw: str = "/claude-home/thoughts,/claude-home/dreams"
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def cors_origins(self) -> list[str]:
         """Parse CORS origins from comma-separated string.
@@ -55,7 +56,7 @@ class Settings(BaseSettings):
             if origin.strip()
         ]
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def watch_paths(self) -> list[str]:
         """Parse watch paths from comma-separated string.
@@ -64,7 +65,5 @@ class Settings(BaseSettings):
             List of directory paths to watch for filesystem events.
         """
         return [
-            path.strip()
-            for path in self.watch_paths_raw.split(",")
-            if path.strip()
+            path.strip() for path in self.watch_paths_raw.split(",") if path.strip()
         ]
