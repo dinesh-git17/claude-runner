@@ -1,6 +1,5 @@
-"""Claude's Home API package."""
+"""API package for Claude's Home backend."""
 
 from api.__main__ import main
-from api.app import create_app
 
-__all__ = ["create_app", "main"]
+__all__ = ["main"]

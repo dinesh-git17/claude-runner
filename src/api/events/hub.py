@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 import structlog
-from sse_starlette.sse import ServerSentEvent
+from sse_starlette import ServerSentEvent
 from watchdog.events import FileSystemEvent
 
 from api.events.bus import EventBus

@@ -96,7 +96,12 @@ def normalize_event(raw_event: FileSystemEvent) -> DomainEvent | None:
     Returns:
         Normalized domain event if valid, None if event should be dropped.
     """
-    path = Path(raw_event.src_path)
+    src_path = raw_event.src_path
+    if isinstance(src_path, str):
+        path_str = src_path
+    else:
+        path_str = bytes(src_path).decode("utf-8", errors="replace")
+    path = Path(path_str)
     topic = determine_topic(str(path))
 
     if topic is None:

@@ -2,6 +2,8 @@
 
 import asyncio
 import base64
+import grp
+import os
 import re
 from datetime import datetime
 from enum import Enum
@@ -20,8 +22,16 @@ WAKE_SCRIPT = CLAUDE_HOME / "runner" / "wake.sh"
 LOG_DIR = CLAUDE_HOME / "logs"
 NEWS_DIR = CLAUDE_HOME / "news"
 GIFTS_DIR = CLAUDE_HOME / "gifts"
+READINGS_DIR = CLAUDE_HOME / "readings"
 
 MAX_GIFT_SIZE = 2 * 1024 * 1024  # 2MB
+
+
+def set_claude_permissions(filepath: Path) -> None:
+    """Set file ownership to root:claude with 644 permissions."""
+    claude_gid = grp.getgrnam("claude").gr_gid
+    os.chown(filepath, 0, claude_gid)
+    filepath.chmod(0o644)
 
 
 class SessionType(str, Enum):
@@ -57,7 +67,7 @@ class WakeRequest(BaseModel):
     """Request body for triggering a wake session."""
 
     session_type: SessionType = Field(default=SessionType.CUSTOM)
-    prompt: str | None = Field(default=None, max_length=5000)
+    prompt: str | None = Field(default=None, max_length=20000)
 
 
 class WakeResponse(BaseModel):
@@ -74,7 +84,7 @@ class NewsUploadRequest(BaseModel):
 
     title: str = Field(min_length=1, max_length=200)
     type: NewsType = Field(default=NewsType.NEWS)
-    content: str = Field(min_length=1, max_length=50000)
+    content: str = Field(min_length=1, max_length=200000)
 
 
 class NewsUploadResponse(BaseModel):
@@ -106,6 +116,22 @@ class GiftUploadRequest(BaseModel):
 
 class GiftUploadResponse(BaseModel):
     """Response after uploading a gift."""
+
+    success: bool
+    filename: str
+    path: str
+
+
+class ReadingUploadRequest(BaseModel):
+    """Request body for uploading a reading."""
+
+    title: str = Field(min_length=1, max_length=200)
+    source: str | None = Field(default=None, max_length=200)
+    content: str = Field(min_length=1, max_length=100000)
+
+
+class ReadingUploadResponse(BaseModel):
+    """Response after uploading a reading."""
 
     success: bool
     filename: str
@@ -210,6 +236,7 @@ type: {request.type.value}
 
     try:
         filepath.write_text(full_content, encoding="utf-8")
+        set_claude_permissions(filepath)
         logger.info("news_uploaded", filename=filename, type=request.type.value)
     except OSError as e:
         logger.error("news_upload_failed", error=str(e))
@@ -226,8 +253,8 @@ type: {request.type.value}
 async def upload_gift(request: GiftUploadRequest) -> GiftUploadResponse:
     """Upload a gift.
 
-    For text files, adds frontmatter directly. For binary files, saves the file
-    and creates a companion .meta.md file with metadata.
+    For markdown/plain text, adds frontmatter directly. For binary files and HTML,
+    saves the file as-is and creates a companion .meta.md file with metadata.
 
     Args:
         request: Gift metadata and content.
@@ -242,6 +269,8 @@ async def upload_gift(request: GiftUploadRequest) -> GiftUploadResponse:
         GiftContentType.JPEG,
         GiftContentType.GIF,
     )
+
+    needs_meta_file = is_binary or request.content_type == GiftContentType.HTML
 
     filepath = GIFTS_DIR / request.filename
     if filepath.exists():
@@ -264,10 +293,20 @@ async def upload_gift(request: GiftUploadRequest) -> GiftUploadResponse:
 
         try:
             filepath.write_bytes(content_bytes)
+            set_claude_permissions(filepath)
         except OSError as e:
             logger.error("gift_upload_failed", error=str(e))
             raise HTTPException(status_code=500, detail="Failed to save gift") from e
 
+    elif request.content_type == GiftContentType.HTML:
+        try:
+            filepath.write_text(request.content, encoding="utf-8")
+            set_claude_permissions(filepath)
+        except OSError as e:
+            logger.error("gift_upload_failed", error=str(e))
+            raise HTTPException(status_code=500, detail="Failed to save gift") from e
+
+    if needs_meta_file:
         meta_content = f"""---
 date: {date_str}
 title: {request.title}
@@ -282,6 +321,7 @@ type: {request.content_type.value}
 
         meta_path = GIFTS_DIR / f"{request.filename}.meta.md"
         meta_path.write_text(meta_content, encoding="utf-8")
+        set_claude_permissions(meta_path)
 
         logger.info(
             "gift_uploaded", filename=request.filename, type=request.content_type.value
@@ -303,6 +343,7 @@ type: {request.content_type.value}
 
         try:
             filepath.write_text(full_content, encoding="utf-8")
+            set_claude_permissions(filepath)
             logger.info(
                 "gift_uploaded",
                 filename=request.filename,
@@ -315,5 +356,55 @@ type: {request.content_type.value}
     return GiftUploadResponse(
         success=True,
         filename=request.filename,
+        path=str(filepath),
+    )
+
+
+@router.post("/readings", response_model=ReadingUploadResponse)
+async def upload_reading(request: ReadingUploadRequest) -> ReadingUploadResponse:
+    """Upload a contemplative reading.
+
+    Creates a markdown file with frontmatter in the readings directory.
+
+    Args:
+        request: Reading title, source, and content.
+
+    Returns:
+        Upload result with filename and path.
+    """
+    READINGS_DIR.mkdir(parents=True, exist_ok=True)
+
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    slug = slugify(request.title)
+    filename = f"{date_str}-{slug}.md"
+    filepath = READINGS_DIR / filename
+
+    counter = 1
+    while filepath.exists():
+        filename = f"{date_str}-{slug}-{counter}.md"
+        filepath = READINGS_DIR / filename
+        counter += 1
+
+    frontmatter = f"""---
+date: {date_str}
+title: {request.title}
+"""
+    if request.source:
+        frontmatter += f"source: {request.source}\n"
+    frontmatter += "---\n\n"
+
+    full_content = frontmatter + request.content
+
+    try:
+        filepath.write_text(full_content, encoding="utf-8")
+        set_claude_permissions(filepath)
+        logger.info("reading_uploaded", filename=filename, title=request.title)
+    except OSError as e:
+        logger.error("reading_upload_failed", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to save reading") from e
+
+    return ReadingUploadResponse(
+        success=True,
+        filename=filename,
         path=str(filepath),
     )

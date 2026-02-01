@@ -1,0 +1,5 @@
+# Taplo configuration for Even Better TOML extension
+# Disable schema validation (the bundled ruff schema is outdated)
+
+[schema]
+enabled = false

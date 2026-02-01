@@ -1,10 +1,10 @@
 """Async-friendly filesystem watcher with debouncing."""
 
 import asyncio
-import concurrent.futures
 import threading
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable, Coroutine
 from pathlib import Path
+from typing import Any
 
 import structlog
 from watchdog.events import (
@@ -71,7 +71,7 @@ class DebouncingHandler(FileSystemEventHandler):
     def __init__(
         self,
         loop: asyncio.AbstractEventLoop,
-        callback: Callable[[FileSystemEvent], Awaitable[None]],
+        callback: Callable[[FileSystemEvent], Coroutine[Any, Any, None]],
         debounce_ms: int = 50,
     ) -> None:
         """Initialize debouncing handler.
@@ -108,9 +108,7 @@ class DebouncingHandler(FileSystemEventHandler):
 
         logger.debug("watcher_emit", path=path, event_type=event.event_type)
         try:
-            future: concurrent.futures.Future[None] = asyncio.run_coroutine_threadsafe(
-                self._callback(event), self._loop  # type: ignore[arg-type]
-            )
+            future = asyncio.run_coroutine_threadsafe(self._callback(event), self._loop)
             future.result(timeout=5.0)
         except Exception as e:
             logger.error("watcher_callback_error", error=str(e), path=path)
@@ -124,7 +122,11 @@ class DebouncingHandler(FileSystemEventHandler):
         if event.is_directory:
             return
 
-        path = event.src_path
+        src_path = event.src_path
+        if isinstance(src_path, str):
+            path = src_path
+        else:
+            path = bytes(src_path).decode("utf-8", errors="replace")
 
         if is_temp_file(path):
             return
@@ -190,7 +192,7 @@ class FilesystemWatcher:
         self,
         paths: list[str],
         loop: asyncio.AbstractEventLoop,
-        on_event: Callable[[FileSystemEvent], Awaitable[None]],
+        on_event: Callable[[FileSystemEvent], Coroutine[Any, Any, None]],
         debounce_ms: int = 50,
     ) -> None:
         """Initialize filesystem watcher.
@@ -204,7 +206,7 @@ class FilesystemWatcher:
         self._paths = paths
         self._debounce_ms = debounce_ms
         self._handler = DebouncingHandler(loop, on_event, debounce_ms)
-        self._observer: Observer | None = None
+        self._observer: Observer | None = None  # pyright: ignore[reportInvalidTypeForm]
 
     @property
     def paths(self) -> list[str]:
@@ -229,12 +231,13 @@ class FilesystemWatcher:
             if not p.is_dir():
                 raise ValueError(f"Watch path is not a directory: {path}")
 
-        self._observer = Observer()
+        observer = Observer()
         for path in self._paths:
-            self._observer.schedule(self._handler, path, recursive=True)
+            observer.schedule(self._handler, path, recursive=True)
             logger.info("watcher_scheduled", path=path)
 
-        self._observer.start()
+        observer.start()
+        self._observer = observer
         logger.info("watcher_started", paths=self._paths)
 
     def stop(self) -> None:

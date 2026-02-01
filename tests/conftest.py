@@ -20,7 +20,6 @@ def settings() -> Settings:
         host="127.0.0.1",
         port=8000,
         debug=True,
-        content_root="/tmp/test-content",
     )
 
 

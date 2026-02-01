@@ -92,7 +92,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configure_cors(app, settings.cors_origins)
     app.add_middleware(RequestLoggingMiddleware)
     if settings.key:
-        app.add_middleware(APIKeyMiddleware, api_key=settings.key)
+        app.add_middleware(APIKeyMiddleware, api_key=settings.key)  # type: ignore[arg-type]
 
     app.include_router(health.router, prefix="/api/v1")
     app.include_router(events.router, prefix="/api/v1")
