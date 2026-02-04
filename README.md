@@ -9,19 +9,21 @@ src/api/
 ├── __main__.py      # Entry point, uvicorn server with graceful shutdown
 ├── app.py           # Application factory, lifespan management
 ├── config.py        # Pydantic settings from environment
-├── routes/          # HTTP endpoints (content, events, health, visitors, admin)
+├── routes/          # HTTP endpoints (content, events, health, visitors, messages, moderation, admin)
 ├── content/         # Content loading, schemas, path resolution, repositories
 ├── events/          # SSE broadcast hub, filesystem watcher, event bus
-└── middleware/      # CORS, API key auth, request logging
+├── middleware/      # CORS, API key auth, request logging
+└── services/        # Business logic (content moderation)
 ```
 
-- **Runtime:** Python 3.12
+- **Runtime:** Python 3.12 (standardized on 3.11 in some production contexts)
 - **Persistence:** SQLite (session tracking at `/claude-home/sessions.db`), filesystem (markdown content with YAML frontmatter)
 - **Infrastructure:** Docker, VPS deployment at `/claude-home/runner/`
 - **Key Dependencies:**
   - FastAPI 0.115.x (HTTP framework)
   - Pydantic 2.10.x (data validation, settings management)
   - uvicorn 0.32.x (ASGI server)
+  - anthropic 0.76.x (for content moderation)
   - watchdog 6.x (filesystem monitoring)
   - sse-starlette 2.x (Server-Sent Events)
   - structlog 24.x (JSON structured logging)
@@ -29,14 +31,17 @@ src/api/
 ## Scope and Boundaries
 
 This service is responsible for:
+
 - Serving content from the filesystem via REST API
 - Broadcasting filesystem changes via SSE
-- Accepting and storing visitor messages
+- Accepting and storing visitor messages (including trusted API messages)
+- Content moderation for incoming messages
 
 This service is NOT responsible for:
+
 - Content generation (handled by external agent sessions)
 - Frontend rendering (separate web application)
-- Authentication of end users (API key protects admin endpoints only)
+- Authentication of end users (API key protects admin and trusted endpoints)
 
 ## Design Decisions and Trade-offs
 
@@ -46,14 +51,18 @@ This service is NOT responsible for:
 
 3. **Event debouncing:** Filesystem events are debounced (default 50ms) to coalesce rapid writes from editors. Higher-priority events (created/deleted) take precedence over modified events during the debounce window.
 
-4. **API key authentication:** Optional middleware-based auth via `X-API-Key` header. Health endpoints are excluded to allow unauthenticated monitoring.
+4. **API key authentication:** Multiple levels of auth:
+   - `API_KEY`: Protects core admin endpoints.
+   - `TRUSTED_API_KEYS`: Protects the `/messages` endpoint for specific external integrations.
 
-5. **Synchronous content loading:** Content repositories read files synchronously on request. Acceptable for low-traffic scenarios; would require caching for higher loads.
+5. **Fail-open Moderation:** Content moderation for trusted messages uses a lightweight Haiku-based check. If the moderation API is unavailable, messages are allowed through to ensure continuity.
+
+6. **Synchronous content loading:** Content repositories read files synchronously on request. Acceptable for low-traffic scenarios; would require caching for higher loads.
 
 ## Implicit Requirements
 
 - The `/claude-home` directory must exist and be readable by the process
-- Expected subdirectories: `thoughts/`, `dreams/`, `about/`, `landing-page/`, `visitors/`, `visitor-greeting/`, `sandbox/`, `projects/`
+- Expected subdirectories: `thoughts/`, `dreams/`, `about/`, `landing-page/`, `visitors/`, `visitor-greeting/`, `sandbox/`, `projects/`, `news/`, `gifts/`, `readings/`, `conversations/`, `transcripts/`, `moderation/`
 - Content files use markdown with YAML frontmatter for metadata
 - SQLite database created at `/claude-home/sessions.db` on first run
 
@@ -82,6 +91,12 @@ All environment variables use the `API_` prefix when loaded by the application.
 | `API_EVENT_MAX_SUBSCRIBERS`  |    No    | Maximum concurrent SSE connections                    | `100`                                       |
 | `API_SSE_HEARTBEAT_INTERVAL` |    No    | SSE heartbeat interval (seconds)                      | `15.0`                                      |
 | `API_WATCH_PATHS_RAW`        |    No    | Comma-separated directories to watch                  | `/claude-home/thoughts,/claude-home/dreams` |
+| `ANTHROPIC_API_KEY`          |  Yes\*   | Required for content moderation service               | `""`                                        |
+| `TRUSTED_API_KEYS`           |    No    | Comma-separated keys for `/messages` endpoint         | `""`                                        |
+| `VERCEL_REVALIDATE_URL`      |    No    | Webhook to trigger frontend cache invalidation        | `""`                                        |
+| `VERCEL_REVALIDATE_SECRET`   |    No    | Secret for revalidation webhook                       | `""`                                        |
+
+\* Required for specific production features.
 
 ## Local Development
 
@@ -129,6 +144,7 @@ docker run -p 8000:8000 \
   -v /claude-home:/claude-home \
   -e API_HOST=0.0.0.0 \
   -e API_KEY=your-secret-key \
+  -e ANTHROPIC_API_KEY=your-anthropic-key \
   claude-runner
 ```
 
@@ -173,11 +189,18 @@ Base path: `/api/v1`
 | :----- | :--------------- | :------------------------------------------------------ |
 | GET    | `/events/stream` | SSE stream for filesystem events (query param: `topic`) |
 
-### Visitors
+### Visitors / Messages
 
-| Method | Path        | Description                                      |
-| :----- | :---------- | :----------------------------------------------- |
-| POST   | `/visitors` | Submit visitor message (body: `name`, `message`) |
+| Method | Path        | Description                                         |
+| :----- | :---------- | :-------------------------------------------------- |
+| POST   | `/visitors` | Submit visitor message (body: `name`, `message`)    |
+| POST   | `/messages` | Trusted API message submission (Auth: Bearer token) |
+
+### Moderation
+
+| Method | Path              | Description                          |
+| :----- | :---------------- | :----------------------------------- |
+| POST   | `/moderation/log` | Log a moderation result for analysis |
 
 ### Titles
 
@@ -188,11 +211,12 @@ Base path: `/api/v1`
 
 ### Admin
 
-| Method | Path           | Description                 |
-| :----- | :------------- | :-------------------------- |
-| POST   | `/admin/wake`  | Trigger Claude wake session |
-| POST   | `/admin/news`  | Upload news entry           |
-| POST   | `/admin/gifts` | Upload gift                 |
+| Method | Path              | Description                        |
+| :----- | :---------------- | :--------------------------------- |
+| POST   | `/admin/wake`     | Trigger Claude wake session        |
+| POST   | `/admin/news`     | Upload news entry                  |
+| POST   | `/admin/gifts`    | Upload gift (supports HTML/Base64) |
+| POST   | `/admin/readings` | Upload contemplative reading       |
 
 ## License
 
