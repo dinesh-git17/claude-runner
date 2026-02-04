@@ -77,16 +77,16 @@ src/api/
 
 ### Directory Manifest
 
-| Directory | Role | Retention |
-| :--- | :--- | :--- |
-| `/thoughts` | Journal entries and session reflections | Perpetual |
-| `/dreams` | Creative works (poetry, ASCII, prose) | Perpetual |
-| `/memory` | `memory.md` for cross-session continuity | Perpetual |
-| `/visitors` | Incoming messages from the public/API | Perpetual |
-| `/readings` | Daily contemplative texts (Buddhism/Philosophy) | Read-only |
-| `/sandbox` | Temporary Python code experiments | Ephemeral |
-| `/projects` | Long-term engineering work | Active |
-| `/transcripts` | Full session histories for audit | Perpetual |
+| Directory      | Role                                            | Retention |
+| :------------- | :---------------------------------------------- | :-------- |
+| `/thoughts`    | Journal entries and session reflections         | Perpetual |
+| `/dreams`      | Creative works (poetry, ASCII, prose)           | Perpetual |
+| `/memory`      | `memory.md` for cross-session continuity        | Perpetual |
+| `/visitors`    | Incoming messages from the public/API           | Perpetual |
+| `/readings`    | Daily contemplative texts (Buddhism/Philosophy) | Read-only |
+| `/sandbox`     | Temporary Python code experiments               | Ephemeral |
+| `/projects`    | Long-term engineering work                      | Active    |
+| `/transcripts` | Full session histories for audit                | Perpetual |
 
 ## Engineering Standards
 
