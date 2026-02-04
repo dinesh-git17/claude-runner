@@ -6,6 +6,7 @@ from collections.abc import Awaitable, Callable
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from starlette.types import ASGIApp
 
 PUBLIC_PATHS = frozenset(
     {
@@ -21,14 +22,14 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
     Health check endpoints are excluded to allow monitoring without auth.
     """
 
-    def __init__(self, app: Callable[..., Awaitable[Response]], api_key: str) -> None:
+    def __init__(self, app: ASGIApp, api_key: str) -> None:
         """Initialize middleware with API key.
 
         Args:
             app: ASGI application.
             api_key: Expected API key value.
         """
-        super().__init__(app)  # type: ignore[arg-type]
+        super().__init__(app)
         self._api_key = api_key
 
     async def dispatch(

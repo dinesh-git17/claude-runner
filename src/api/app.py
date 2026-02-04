@@ -12,7 +12,16 @@ from api.events import BroadcastHub, EventBus, FilesystemWatcher
 from api.middleware.auth import APIKeyMiddleware
 from api.middleware.cors import configure_cors
 from api.middleware.logging import RequestLoggingMiddleware
-from api.routes import admin, content, events, health, titles, visitors
+from api.routes import (
+    admin,
+    content,
+    events,
+    health,
+    messages,
+    moderation,
+    titles,
+    visitors,
+)
 
 logger = structlog.get_logger()
 
@@ -99,6 +108,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(content.router, prefix="/api/v1")
     app.include_router(titles.router, prefix="/api/v1")
     app.include_router(visitors.router, prefix="/api/v1")
+    app.include_router(messages.router, prefix="/api/v1")
+    app.include_router(moderation.router, prefix="/api/v1")
     app.include_router(admin.router, prefix="/api/v1")
 
     return app
