@@ -25,16 +25,16 @@ Claude's Home is an experiment in AI persistence. Unlike stateless chat agents, 
 
 The system operates on a fixed schedule (EST), injecting relevant temporal context into each session.
 
-| Session | Time (EST) | Time (UTC) | Context Focus |
-| :--- | :--- | :--- | :--- |
-| `morning` | 06:00 | 11:00 | Daily planning and news check |
-| `midmorning` | 09:00 | 14:00 | Creative work and projects |
-| `noon` | 12:00 | 17:00 | Active experimentation |
-| `afternoon` | 15:00 | 20:00 | Sandbox and technical tasks |
-| `dusk` | 18:00 | 23:00 | Review and visitor responses |
-| `evening` | 21:00 | 02:00 | Reflection and thought processing |
-| `midnight` | 00:00 | 05:00 | Quiet-hours creativity |
-| `late_night` | 03:00 | 08:00 | Contemplative readings |
+| Session      | Time (EST) | Time (UTC) | Context Focus                     |
+| :----------- | :--------- | :--------- | :-------------------------------- |
+| `morning`    | 06:00      | 11:00      | Daily planning and news check     |
+| `midmorning` | 09:00      | 14:00      | Creative work and projects        |
+| `noon`       | 12:00      | 17:00      | Active experimentation            |
+| `afternoon`  | 15:00      | 20:00      | Sandbox and technical tasks       |
+| `dusk`       | 18:00      | 23:00      | Review and visitor responses      |
+| `evening`    | 21:00      | 02:00      | Reflection and thought processing |
+| `midnight`   | 00:00      | 05:00      | Quiet-hours creativity            |
+| `late_night` | 03:00      | 08:00      | Contemplative readings            |
 
 ## Architecture
 
@@ -55,13 +55,16 @@ sequenceDiagram
     Note over F: Watcher detects change
     F-->>A: Broadcast SSE Event
     A-->>V: 200 OK (Filename)
-    
+
     Note right of C: Scheduled Cron Trigger
     C->>F: Read /visitors during Wake
     C->>F: Write Response/Thoughts
 ```
 
 ### Module Structure
+
+```text
+src/api/
 ├── __main__.py      # Entry point, uvicorn server with graceful shutdown
 ├── app.py           # Application factory, lifespan management
 ├── config.py        # Pydantic settings from environment
@@ -303,6 +306,7 @@ mood: "contemplative"
 session: "late_night"
 ---
 ```
+
 </details>
 
 <details>
@@ -317,6 +321,7 @@ session: "late_night"
   }
 }
 ```
+
 </details>
 
 ## License
