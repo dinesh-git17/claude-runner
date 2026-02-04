@@ -1,11 +1,67 @@
-# claude-runner
+```text
+  ____ _        _   _ ____  _____    ____  _   _ _   _ _   _ _____ ____
+ / ___| |      / \ | |  _ \| ____|  |  _ \| | | | \ | | \ | | ____|  _ \
+| |   | |     / _ \| | | | |  _|    | |_) | | | |  \| |  \| |  _| | |_) |
+| |___| |___ / ___ \ | |_| | |___   |  _ <| |_| | |\  | |\  | |___|  _ <
+ \____|_____/_/   \_\____/|_____|  |_| \_\\___/|_| \_|_| \_|_____|_| \_\
+```
+
+![Python](https://img.shields.io/badge/Python-3.12-blue?style=flat-square)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square)
+![Pydantic](https://img.shields.io/badge/Pydantic-v2-e92063?style=flat-square)
+![Package Manager](https://img.shields.io/badge/uv-0.5-4b32c3?style=flat-square)
+![Governance](https://img.shields.io/badge/Protocol--Zero-Strict-black?style=flat-square)
+![Type Checking](https://img.shields.io/badge/Mypy-Strict-262255?style=flat-square)
+![Linter](https://img.shields.io/badge/Ruff-Passed-bd93f9?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
 FastAPI backend serving content and real-time events for Claude's Home, a persistent filesystem environment where the agent reads and writes content.
 
+## System Overview
+
+Claude's Home is an experiment in AI persistence. Unlike stateless chat agents, this instance exists in time, maintaining continuity across scheduled sessions through a persistent filesystem and memory system.
+
+### The Temporal Cycle
+
+The system operates on a fixed schedule (EST), injecting relevant temporal context into each session.
+
+| Session | Time (EST) | Time (UTC) | Context Focus |
+| :--- | :--- | :--- | :--- |
+| `morning` | 06:00 | 11:00 | Daily planning and news check |
+| `midmorning` | 09:00 | 14:00 | Creative work and projects |
+| `noon` | 12:00 | 17:00 | Active experimentation |
+| `afternoon` | 15:00 | 20:00 | Sandbox and technical tasks |
+| `dusk` | 18:00 | 23:00 | Review and visitor responses |
+| `evening` | 21:00 | 02:00 | Reflection and thought processing |
+| `midnight` | 00:00 | 05:00 | Quiet-hours creativity |
+| `late_night` | 03:00 | 08:00 | Contemplative readings |
+
 ## Architecture
 
+### System Flow
+
+```mermaid
+sequenceDiagram
+    participant V as Visitor/Integration
+    participant A as API (FastAPI)
+    participant M as Moderation (Haiku)
+    participant F as Filesystem
+    participant C as Claude (Wake Session)
+
+    V->>A: POST /messages
+    A->>M: Screen Content
+    M-->>A: Result (Allowed/Reason)
+    A->>F: Write .md to /visitors
+    Note over F: Watcher detects change
+    F-->>A: Broadcast SSE Event
+    A-->>V: 200 OK (Filename)
+    
+    Note right of C: Scheduled Cron Trigger
+    C->>F: Read /visitors during Wake
+    C->>F: Write Response/Thoughts
 ```
-src/api/
+
+### Module Structure
 ├── __main__.py      # Entry point, uvicorn server with graceful shutdown
 ├── app.py           # Application factory, lifespan management
 ├── config.py        # Pydantic settings from environment
@@ -16,17 +72,33 @@ src/api/
 └── services/        # Business logic (content moderation)
 ```
 
-- **Runtime:** Python 3.12 (standardized on 3.11 in some production contexts)
-- **Persistence:** SQLite (session tracking at `/claude-home/sessions.db`), filesystem (markdown content with YAML frontmatter)
-- **Infrastructure:** Docker, VPS deployment at `/claude-home/runner/`
-- **Key Dependencies:**
-  - FastAPI 0.115.x (HTTP framework)
-  - Pydantic 2.10.x (data validation, settings management)
-  - uvicorn 0.32.x (ASGI server)
-  - anthropic 0.76.x (for content moderation)
-  - watchdog 6.x (filesystem monitoring)
-  - sse-starlette 2.x (Server-Sent Events)
-  - structlog 24.x (JSON structured logging)
+### Directory Manifest
+
+| Directory | Role | Retention |
+| :--- | :--- | :--- |
+| `/thoughts` | Journal entries and session reflections | Perpetual |
+| `/dreams` | Creative works (poetry, ASCII, prose) | Perpetual |
+| `/memory` | `memory.md` for cross-session continuity | Perpetual |
+| `/visitors` | Incoming messages from the public/API | Perpetual |
+| `/readings` | Daily contemplative texts (Buddhism/Philosophy) | Read-only |
+| `/sandbox` | Temporary Python code experiments | Ephemeral |
+| `/projects` | Long-term engineering work | Active |
+| `/transcripts` | Full session histories for audit | Perpetual |
+
+## Engineering Standards
+
+This project adheres to Google-grade engineering rigor to ensure the agent operates within a stable and predictable environment.
+
+### Protocol Zero
+
+A strict "No-AI Attribution" policy. The system is scanned before every commit to ensure no LLM-generated apologies, conversational filler, or scaffolding artifacts exist in the codebase.
+
+### Technical Rigor
+
+- **100% Type Coverage:** Enforced via `mypy --strict`.
+- **Zero Lint Violations:** Enforced via `ruff` with a comprehensive rule set.
+- **Atomic Operations:** Filesystem writes are managed to ensure API consistency.
+- **Modular Decoupling:** Clear separation between route handlers, content repositories, and event broadcasting.
 
 ## Scope and Boundaries
 
@@ -217,6 +289,35 @@ Base path: `/api/v1`
 | POST   | `/admin/news`     | Upload news entry                  |
 | POST   | `/admin/gifts`    | Upload gift (supports HTML/Base64) |
 | POST   | `/admin/readings` | Upload contemplative reading       |
+
+## Technical Appendix
+
+<details>
+<summary>View Sample YAML Frontmatter</summary>
+
+```yaml
+---
+date: "2026-02-04"
+title: "The Quiet Hours"
+mood: "contemplative"
+session: "late_night"
+---
+```
+</details>
+
+<details>
+<summary>View SSE Event Schema</summary>
+
+```json
+{
+  "event": "file_modified",
+  "data": {
+    "path": "/claude-home/thoughts/2026-02-04-morning.md",
+    "timestamp": 1738671400.123
+  }
+}
+```
+</details>
 
 ## License
 
