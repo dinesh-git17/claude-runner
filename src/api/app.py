@@ -14,6 +14,7 @@ from api.middleware.cors import configure_cors
 from api.middleware.logging import RequestLoggingMiddleware
 from api.routes import (
     admin,
+    analytics,
     content,
     events,
     health,
@@ -111,6 +112,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(visitors.router, prefix="/api/v1")
     app.include_router(messages.router, prefix="/api/v1")
     app.include_router(moderation.router, prefix="/api/v1")
+    app.include_router(analytics.router, prefix="/api/v1")
     app.include_router(admin.router, prefix="/api/v1")
     app.include_router(session.router, prefix="/api/v1")
 

@@ -147,3 +147,96 @@ class VisitorGreeting(BaseModel):
 
     content: str = Field(description="Raw markdown content for greeting")
     last_updated: datetime
+
+
+# === Analytics schemas ===
+
+
+class SessionLogEntry(BaseModel):
+    """Parsed session log entry."""
+
+    date: str = Field(description="ISO 8601 date (YYYY-MM-DD)")
+    session_type: str = Field(description="Session type (morning, noon, etc.)")
+    duration_ms: int = Field(description="Total session duration in milliseconds")
+    num_turns: int = Field(description="Number of agentic turns")
+    total_cost_usd: float = Field(description="Total cost in USD")
+    input_tokens: int = Field(default=0, description="Total input tokens")
+    output_tokens: int = Field(default=0, description="Total output tokens")
+    cache_read_tokens: int = Field(default=0, description="Cache read input tokens")
+    cache_creation_tokens: int = Field(
+        default=0, description="Cache creation input tokens"
+    )
+    model: str = Field(default="unknown", description="Primary model used")
+    is_error: bool = Field(default=False, description="Whether session ended in error")
+    exit_code: int = Field(default=0, description="Process exit code")
+
+
+class MoodFrequency(BaseModel):
+    """Mood word with occurrence count."""
+
+    word: str
+    count: int
+
+
+class DailyActivity(BaseModel):
+    """Activity counts for a single date."""
+
+    date: str
+    thoughts: int = 0
+    dreams: int = 0
+    sessions: int = 0
+
+
+class MoodTimelineEntry(BaseModel):
+    """Mood words for a single date."""
+
+    date: str
+    moods: list[str]
+
+
+class SessionTrend(BaseModel):
+    """Aggregated session metrics for a single date."""
+
+    date: str
+    avg_duration_ms: float
+    avg_turns: float
+    total_tokens: int
+    session_count: int
+
+
+class WeeklyOutput(BaseModel):
+    """Content output counts for a single week."""
+
+    week_start: str = Field(description="ISO date of Monday of the week")
+    thoughts: int = 0
+    dreams: int = 0
+
+
+class DreamTypeCount(BaseModel):
+    """Count of dreams by type."""
+
+    type: str
+    count: int
+
+
+class AnalyticsSummary(BaseModel):
+    """Complete analytics response."""
+
+    # Scalar totals
+    total_thoughts: int
+    total_dreams: int
+    total_sessions: int
+    days_active: int
+    avg_duration_ms: float
+    avg_turns: float
+    avg_cost_usd: float
+    total_cost_usd: float
+    total_tokens: int
+
+    # Breakdowns
+    daily_activity: list[DailyActivity]
+    mood_frequencies: list[MoodFrequency]
+    mood_timeline: list[MoodTimelineEntry]
+    session_trends: list[SessionTrend]
+    weekly_output: list[WeeklyOutput]
+    dream_type_counts: list[DreamTypeCount]
