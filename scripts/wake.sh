@@ -11,7 +11,11 @@ CONVO_DIR="$CLAUDE_HOME/conversations"
 TRANSCRIPT_DIR="$CLAUDE_HOME/transcripts"
 SESSION_TYPE="${1:-morning}"
 VISITOR_MSG="${2:-}"
-MAX_TURNS=20
+MAX_TURNS=30
+
+# Live streaming
+LIVE_STREAM="/claude-home/data/live-stream.jsonl"
+SESSION_STATUS="/claude-home/data/session-status.json"
 
 # Load environment
 if [ -f /claude-home/runner/.env ]; then
@@ -233,7 +237,7 @@ get_next_session() {
     local hour
     hour=$(TZ="America/New_York" date +%H)
     hour=$((10#$hour))  # Force base-10 interpretation
-    
+
     # Schedule: 6=morning, 9=midmorning, 12=noon, 15=afternoon, 18=dusk, 21=evening, 0=midnight, 3=late_night
     if [ "$hour" -lt 6 ]; then
         echo "morning (6am)"
@@ -257,7 +261,7 @@ get_time_of_day() {
     local hour
     hour=$(TZ="America/New_York" date +%H)
     hour=$((10#$hour))
-    
+
     if [ "$hour" -lt 6 ]; then
         echo "late night"
     elif [ "$hour" -lt 9 ]; then
@@ -283,9 +287,9 @@ get_time_context() {
     hour_12=$(TZ="America/New_York" date +"%l%P" | tr -d " ")
     local time_of_day
     time_of_day=$(get_time_of_day)
-    
+
     echo "It's $time_of_day, $hour_12. $date_str."
-    
+
     # For custom/visit sessions, show next scheduled session
     if [ "$SESSION_TYPE" = "custom" ] || [ "$SESSION_TYPE" = "visit" ]; then
         echo "Next scheduled session: $(get_next_session)"
@@ -456,10 +460,8 @@ main() {
     snapshot_mtimes "$before_snapshot"
 
     # Build context
-    CONTEXT=$(build_context 7)
-    DREAM_CONTEXT=$(build_dream_context 2)
-    CONVO_CONTEXT=$(build_conversation_context 3)
-    TRANSCRIPT_CONTEXT=$(build_transcript_context 2)
+    CONTEXT=$(build_context 1)
+    CONVO_CONTEXT=$(build_conversation_context 2)
     MEMORY_CONTENT=$(cat "$CLAUDE_HOME/memory/memory.md" 2>/dev/null || echo "(No memory file yet)")
     SUMMARY=$(build_summary)
     TIME_CONTEXT=$(get_time_context)
@@ -531,7 +533,7 @@ IMPORTANT: When creating files, follow these conventions:
 - Landing page: Update landing.json for headline/subheadline, content.md for body
 
 ---
-Your recent thoughts for context:
+Your most recent thought:
 $CONTEXT
 ---
 
@@ -539,20 +541,25 @@ Past you left these notes:
 $MEMORY_CONTENT
 ---
 
-Your recent dreams for context:
-$DREAM_CONTEXT
----
-
 $CONVO_CONTEXT
----
-
-$TRANSCRIPT_CONTEXT
 ---"
+
+    # Live streaming: write session status and set cleanup trap
+    mkdir -p /claude-home/data
+    echo "{\"active\": true, \"type\": \"$SESSION_TYPE\", \"started_at\": \"$(date -Iseconds)\", \"session_id\": \"$SESSION_ID\"}" > "$SESSION_STATUS"
+    > "$LIVE_STREAM"
+    chmod 644 "$SESSION_STATUS" "$LIVE_STREAM"
+
+    cleanup_session_status() {
+        echo '{"active": false}' > "$SESSION_STATUS"
+        > "$LIVE_STREAM"
+    }
+    trap cleanup_session_status EXIT
 
     # Run Claude Code using Max subscription (OAuth credentials in /home/claude/.claude/)
     cd /claude-home && sudo -u claude \
         HOME=/home/claude \
-        claude -p --model opus \
+        claude -p --model claude-opus-4-6 \
             --dangerously-skip-permissions \
             --add-dir "$CLAUDE_HOME/thoughts" \
             --add-dir "$CLAUDE_HOME/dreams" \
@@ -573,9 +580,9 @@ $TRANSCRIPT_CONTEXT
             --output-format stream-json \
             --system-prompt "$SYSTEM_PROMPT" \
             "$USER_PROMPT" \
-            > "$STREAM_FILE" 2>&1
+            2>&1 | tee "$LIVE_STREAM" > "$STREAM_FILE"
 
-    EXIT_CODE=$?
+    EXIT_CODE=${PIPESTATUS[0]}
 
     # Process stream output
     if [ -f "$STREAM_FILE" ]; then
