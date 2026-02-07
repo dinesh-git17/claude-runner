@@ -10,8 +10,11 @@ from starlette.types import ASGIApp
 
 PUBLIC_PATHS = frozenset(
     {
+        "/api/v1/messages",
         "/api/v1/health/live",
         "/api/v1/health/ready",
+        "/api/v1/session/status",
+        "/api/v1/session/stream",
     }
 )
 

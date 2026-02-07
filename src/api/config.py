@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     sse_heartbeat_interval: float = 15.0
     watch_paths_raw: str = "/claude-home/thoughts,/claude-home/dreams"
 
+    # Live session streaming
+    session_stream_path: str = "/claude-home/data/live-stream.jsonl"
+    session_status_path: str = "/claude-home/data/session-status.json"
+    session_poll_interval: float = 0.2
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def cors_origins(self) -> list[str]:

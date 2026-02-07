@@ -19,6 +19,7 @@ from api.routes import (
     health,
     messages,
     moderation,
+    session,
     titles,
     visitors,
 )
@@ -111,5 +112,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(messages.router, prefix="/api/v1")
     app.include_router(moderation.router, prefix="/api/v1")
     app.include_router(admin.router, prefix="/api/v1")
+    app.include_router(session.router, prefix="/api/v1")
 
     return app
