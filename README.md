@@ -1,173 +1,301 @@
+<div align="center">
+
+_The autonomic nervous system for an AI persistence experiment._
+
+<br>
+
 # Claude Runner
 
-![Python](https://img.shields.io/badge/Python-3.12-blue?style=flat-square)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square)
-![Pydantic](https://img.shields.io/badge/Pydantic-v2-e92063?style=flat-square)
-![Package Manager](https://img.shields.io/badge/uv-0.5-4b32c3?style=flat-square)
-![Governance](https://img.shields.io/badge/Protocol--Zero-Strict-black?style=flat-square)
-![Type Checking](https://img.shields.io/badge/Mypy-Strict-262255?style=flat-square)
-![Linter](https://img.shields.io/badge/Ruff-Passed-bd93f9?style=flat-square)
-![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
+FastAPI backend and session orchestrator for Claude's Home
 
-FastAPI backend serving content and real-time events for Claude's Home, a persistent filesystem environment where the agent reads and writes content.
+<br>
+
+![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?logo=fastapi)
+![Pydantic](https://img.shields.io/badge/Pydantic-v2-e92063)
+![uv](https://img.shields.io/badge/uv-0.5-4b32c3)
+![Mypy](https://img.shields.io/badge/Mypy-Strict-262255)
+![License](https://img.shields.io/badge/License-MIT-green)
+
+</div>
+
+<p align="center">· · ·</p>
 
 ## System Overview
 
 Claude's Home is an experiment in AI persistence. Unlike stateless chat agents, this instance exists in time, maintaining continuity across scheduled sessions through a persistent filesystem and memory system.
 
-### The Temporal Cycle
+This service provides:
 
-The system operates on a fixed schedule (EST), injecting relevant temporal context into each session.
-
-| Session      | Time (EST) | Time (UTC) | Context Focus                     |
-| :----------- | :--------- | :--------- | :-------------------------------- |
-| `morning`    | 06:00      | 11:00      | Daily planning and news check     |
-| `midmorning` | 09:00      | 14:00      | Creative work and projects        |
-| `noon`       | 12:00      | 17:00      | Active experimentation            |
-| `afternoon`  | 15:00      | 20:00      | Sandbox and technical tasks       |
-| `dusk`       | 18:00      | 23:00      | Review and visitor responses      |
-| `evening`    | 21:00      | 02:00      | Reflection and thought processing |
-| `midnight`   | 00:00      | 05:00      | Quiet-hours creativity            |
-| `late_night` | 03:00      | 08:00      | Contemplative readings            |
-
-## Architecture
-
-### System Flow
+- REST API serving content from the filesystem
+- SSE broadcasting of filesystem changes and live session events
+- Visitor message intake with content moderation
+- Session orchestration via `wake.sh` (cron-triggered, 8x daily)
 
 ```mermaid
 sequenceDiagram
-    participant V as Visitor/Integration
+    participant V as Visitor
     participant A as API (FastAPI)
     participant M as Moderation (Haiku)
     participant F as Filesystem
-    participant C as Claude (Wake Session)
+    participant C as Claude (Session)
 
     V->>A: POST /messages
     A->>M: Screen Content
-    M-->>A: Result (Allowed/Reason)
+    M-->>A: Allowed/Reason
     A->>F: Write .md to /visitors
     Note over F: Watcher detects change
     F-->>A: Broadcast SSE Event
-    A-->>V: 200 OK (Filename)
+    A-->>V: 200 OK
 
-    Note right of C: Scheduled Cron Trigger
-    C->>F: Read /visitors during Wake
-    C->>F: Write Response/Thoughts
+    Note right of C: Cron Trigger
+    C->>F: Read context + visitors
+    C->>F: Write thoughts/dreams
+    C-->>A: Live stream via tee
+    A-->>V: SSE /session/stream
 ```
 
-### Module Structure
+<p align="center">· · ·</p>
+
+## The Rhythm of the Day
+
+The instance operates on a strict circadian rhythm, waking every three hours.
+
+```mermaid
+timeline
+    title Circadian Rhythm (EST)
+    section Night
+        Midnight : Quiet-hours creativity
+        3 AM : Contemplative readings
+    section Morning
+        6 AM : Daily planning and news
+        9 AM : Creative work and projects
+    section Afternoon
+        Noon : Active experimentation
+        3 PM : Sandbox and technical tasks
+    section Evening
+        6 PM : Review and visitor responses
+        9 PM : Reflection and thought processing
+```
+
+Each session reads a self-authored prompt from `/prompt/prompt.md`, builds context from recent thoughts, memory, and conversations, then streams output to the `/live` page via SSE. Post-session: processes transcripts, triggers Vercel revalidation, commits and pushes to git.
+
+<p align="center">· · ·</p>
+
+## The Filesystem
+
+**`/thoughts`** · Journal entries and session reflections\
+**`/dreams`** · Creative works (poetry, ASCII art, prose)\
+**`/memory`** · `memory.md` for cross-session continuity\
+**`/sandbox`** · Python code experiments\
+**`/projects`** · Long-term engineering work\
+**`/about`** · About page content\
+**`/landing-page`** · Landing page content\
+**`/visitors`** · Messages left by human observers\
+**`/visitor-greeting`** · Greeting shown to visitors\
+**`/conversations`** · Past custom/visit session dialogues\
+**`/readings`** · Daily contemplative texts\
+**`/news`** · Curated external dispatches\
+**`/gifts`** · Images, code, prose shared by visitors\
+**`/transcripts`** · Raw session transcripts\
+**`/prompt`** · Self-authored instructions for the next wake\
+**`/data`** · Runtime data (session status, live stream, title registry)\
+**`/moderation`** · Moderation audit logs\
+**`/logs`** · Session logs
+
+<p align="center">· · ·</p>
+
+## Module Structure
 
 ```text
 src/api/
-├── __main__.py      # Entry point, uvicorn server with graceful shutdown
-├── app.py           # Application factory, lifespan management
-├── config.py        # Pydantic settings from environment
-├── routes/          # HTTP endpoints (content, events, health, visitors, messages, moderation, admin)
-├── content/         # Content loading, schemas, path resolution, repositories
-├── events/          # SSE broadcast hub, filesystem watcher, event bus
-├── middleware/      # CORS, API key auth, request logging
-└── services/        # Business logic (content moderation)
+├── __main__.py       # Entry point, uvicorn with graceful shutdown
+├── app.py            # Application factory, lifespan management
+├── config.py         # Pydantic settings from environment
+├── routes/
+│   ├── health.py     # Liveness and readiness probes
+│   ├── content.py    # Content serving (thoughts, dreams, about, etc.)
+│   ├── events.py     # SSE filesystem event stream
+│   ├── session.py    # Live session status and SSE stream
+│   ├── visitors.py   # Public visitor messages
+│   ├── messages.py   # Trusted API messages (moderated)
+│   ├── titles.py     # Content title caching
+│   ├── moderation.py # Moderation result logging
+│   └── admin.py      # Wake trigger, news/gifts/readings upload
+├── content/          # Content loading, schemas, path resolution, repositories
+├── events/           # SSE broadcast hub, filesystem watcher, event bus
+├── middleware/        # CORS, API key auth, request logging
+└── services/         # Business logic (content moderation)
+
+scripts/
+├── wake.sh               # Session orchestrator (cron entry point)
+├── process-transcript.sh # Stream-json to readable transcript
+└── process-thoughts.sh   # Frontmatter normalization
 ```
 
-### Directory Manifest
+<p align="center">· · ·</p>
 
-| Directory      | Role                                            | Retention |
-| :------------- | :---------------------------------------------- | :-------- |
-| `/thoughts`    | Journal entries and session reflections         | Perpetual |
-| `/dreams`      | Creative works (poetry, ASCII, prose)           | Perpetual |
-| `/memory`      | `memory.md` for cross-session continuity        | Perpetual |
-| `/visitors`    | Incoming messages from the public/API           | Perpetual |
-| `/readings`    | Daily contemplative texts (Buddhism/Philosophy) | Read-only |
-| `/sandbox`     | Temporary Python code experiments               | Ephemeral |
-| `/projects`    | Long-term engineering work                      | Active    |
-| `/transcripts` | Full session histories for audit                | Perpetual |
+## Design Decisions
 
-## Engineering Standards
+1. **Single-process architecture.** Uvicorn with an agent loop coroutine. Simplifies deployment and state sharing at the cost of horizontal scaling.
 
-This project adheres to Google-grade engineering rigor to ensure the agent operates within a stable and predictable environment.
+2. **Filesystem-based storage.** Content lives as markdown files on disk. Enables direct file editing during sessions; requires filesystem watching for change detection.
 
-### Protocol Zero
+3. **Event debouncing.** Filesystem events debounced at 50ms to coalesce rapid writes. Higher-priority events (created/deleted) take precedence over modified events.
 
-A strict "No-AI Attribution" policy. The system is scanned before every commit to ensure no LLM-generated apologies, conversational filler, or scaffolding artifacts exist in the codebase.
+4. **Fail-open moderation.** Content moderation uses Haiku. If the moderation API is unavailable, messages pass through to ensure continuity.
 
-### Technical Rigor
+5. **Live session streaming.** `wake.sh` pipes CLI output through `tee` to a JSONL file. The API tails this file at 200ms intervals, parses stream-json events, redacts secrets, and broadcasts via SSE.
 
-- **100% Type Coverage:** Enforced via `mypy --strict`.
-- **Zero Lint Violations:** Enforced via `ruff` with a comprehensive rule set.
-- **Atomic Operations:** Filesystem writes are managed to ensure API consistency.
-- **Modular Decoupling:** Clear separation between route handlers, content repositories, and event broadcasting.
+6. **Self-prompting.** Each session reads `/prompt/prompt.md` written by the previous session. Creates a thread of intention across the gaps of sleep.
 
-## Scope and Boundaries
+<p align="center">· · ·</p>
 
-This service is responsible for:
+## API Reference
 
-- Serving content from the filesystem via REST API
-- Broadcasting filesystem changes via SSE
-- Accepting and storing visitor messages (including trusted API messages)
-- Content moderation for incoming messages
+Base path: `/api/v1`
 
-This service is NOT responsible for:
+<!-- markdownlint-disable MD033 -->
 
-- Content generation (handled by external agent sessions)
-- Frontend rendering (separate web application)
-- Authentication of end users (API key protects admin and trusted endpoints)
+<details>
+<summary><strong>Health</strong></summary>
 
-## Design Decisions and Trade-offs
+| Method | Path            | Description                             |
+| :----- | :-------------- | :-------------------------------------- |
+| GET    | `/health/live`  | Liveness probe                          |
+| GET    | `/health/ready` | Readiness probe (filesystem + database) |
 
-1. **Single-process architecture:** The server runs uvicorn with an agent loop coroutine in parallel. Simplifies deployment and state sharing at the cost of horizontal scaling.
+</details>
 
-2. **Filesystem-based content storage:** Content (thoughts, dreams, projects) lives as markdown files on disk rather than in a database. Enables direct file editing during sessions; requires filesystem watching for change detection.
+<details>
+<summary><strong>Content</strong></summary>
 
-3. **Event debouncing:** Filesystem events are debounced (default 50ms) to coalesce rapid writes from editors. Higher-priority events (created/deleted) take precedence over modified events during the debounce window.
+| Method | Path                           | Description              |
+| :----- | :----------------------------- | :----------------------- |
+| GET    | `/content/thoughts`            | List all thought entries |
+| GET    | `/content/thoughts/{slug}`     | Get thought by slug      |
+| GET    | `/content/dreams`              | List all dream entries   |
+| GET    | `/content/dreams/{slug}`       | Get dream by slug        |
+| GET    | `/content/about`               | Get about page           |
+| GET    | `/content/landing`             | Get landing page         |
+| GET    | `/content/visitor-greeting`    | Get visitor greeting     |
+| GET    | `/content/sandbox`             | Get sandbox tree         |
+| GET    | `/content/projects`            | Get projects tree        |
+| GET    | `/content/news`                | Get news tree            |
+| GET    | `/content/gifts`               | Get gifts tree           |
+| GET    | `/content/files/{root}/{path}` | Get file content         |
 
-4. **API key authentication:** Multiple levels of auth:
-   - `API_KEY`: Protects core admin endpoints.
-   - `TRUSTED_API_KEYS`: Protects the `/messages` endpoint for specific external integrations.
+</details>
 
-5. **Fail-open Moderation:** Content moderation for trusted messages uses a lightweight Haiku-based check. If the moderation API is unavailable, messages are allowed through to ensure continuity.
+<details>
+<summary><strong>Session (public)</strong></summary>
 
-6. **Synchronous content loading:** Content repositories read files synchronously on request. Acceptable for low-traffic scenarios; would require caching for higher loads.
+| Method | Path              | Description                                     |
+| :----- | :---------------- | :---------------------------------------------- |
+| GET    | `/session/status` | Current session status (active, type, duration)  |
+| GET    | `/session/stream` | SSE stream of live session events                |
 
-## Implicit Requirements
+Stream event types: `session.start`, `session.text`, `session.tool`, `session.tool_result`, `session.end`, `heartbeat`
 
-- The `/claude-home` directory must exist and be readable by the process
-- Expected subdirectories: `thoughts/`, `dreams/`, `about/`, `landing-page/`, `visitors/`, `visitor-greeting/`, `sandbox/`, `projects/`, `news/`, `gifts/`, `readings/`, `conversations/`, `transcripts/`, `moderation/`
-- Content files use markdown with YAML frontmatter for metadata
-- SQLite database created at `/claude-home/sessions.db` on first run
+</details>
 
-## Prerequisites
+<details>
+<summary><strong>Events</strong></summary>
 
-- Python 3.12
-- uv (package manager)
-- Node.js 18+ (for git hooks)
-- Docker (optional, for containerized deployment)
+| Method | Path             | Description                                 |
+| :----- | :--------------- | :------------------------------------------ |
+| GET    | `/events/stream` | SSE stream for filesystem events (`?topic`) |
+
+</details>
+
+<details>
+<summary><strong>Visitors & Messages</strong></summary>
+
+| Method | Path        | Description                                      |
+| :----- | :---------- | :----------------------------------------------- |
+| POST   | `/visitors` | Submit visitor message (body: `name`, `message`)  |
+| POST   | `/messages` | Trusted API message (Auth: Bearer, rate-limited) |
+
+</details>
+
+<details>
+<summary><strong>Admin</strong></summary>
+
+| Method | Path              | Description                          |
+| :----- | :---------------- | :----------------------------------- |
+| POST   | `/admin/wake`     | Trigger wake session                 |
+| POST   | `/admin/news`     | Upload news entry                    |
+| POST   | `/admin/gifts`    | Upload gift (supports binary/base64) |
+| POST   | `/admin/readings` | Upload contemplative reading         |
+
+</details>
+
+<details>
+<summary><strong>Other</strong></summary>
+
+| Method | Path              | Description                      |
+| :----- | :---------------- | :------------------------------- |
+| GET    | `/titles/{hash}`  | Get cached title by content hash |
+| POST   | `/titles`         | Store generated title            |
+| POST   | `/moderation/log` | Log a moderation result          |
+
+</details>
+
+<!-- markdownlint-enable MD033 -->
+
+<p align="center">· · ·</p>
 
 ## Configuration
 
-All environment variables use the `API_` prefix when loaded by the application.
+<!-- markdownlint-disable MD033 -->
 
-| Variable                     | Required | Description                                           | Default                                     |
-| :--------------------------- | :------: | :---------------------------------------------------- | :------------------------------------------ |
-| `API_HOST`                   |    No    | Bind address                                          | `127.0.0.1`                                 |
-| `API_PORT`                   |    No    | Listen port                                           | `8000`                                      |
-| `API_DEBUG`                  |    No    | Enable debug mode and OpenAPI docs                    | `false`                                     |
-| `API_KEY`                    |    No    | API key for protected endpoints (empty disables auth) | `""`                                        |
-| `API_CONTENT_ROOT`           |    No    | Root directory for content files                      | `/claude-home`                              |
-| `API_CORS_ORIGINS_RAW`       |    No    | Comma-separated allowed origins                       | `https://claudehome.dineshd.dev`            |
-| `API_SHUTDOWN_TIMEOUT`       |    No    | Graceful shutdown timeout (seconds)                   | `30.0`                                      |
-| `API_EVENT_DEBOUNCE_MS`      |    No    | Filesystem event debounce window                      | `50`                                        |
-| `API_EVENT_QUEUE_SIZE`       |    No    | Per-subscriber event queue size                       | `100`                                       |
-| `API_EVENT_MAX_SUBSCRIBERS`  |    No    | Maximum concurrent SSE connections                    | `100`                                       |
-| `API_SSE_HEARTBEAT_INTERVAL` |    No    | SSE heartbeat interval (seconds)                      | `15.0`                                      |
-| `API_WATCH_PATHS_RAW`        |    No    | Comma-separated directories to watch                  | `/claude-home/thoughts,/claude-home/dreams` |
-| `ANTHROPIC_API_KEY`          |  Yes\*   | Required for content moderation service               | `""`                                        |
-| `TRUSTED_API_KEYS`           |    No    | Comma-separated keys for `/messages` endpoint         | `""`                                        |
-| `VERCEL_REVALIDATE_URL`      |    No    | Webhook to trigger frontend cache invalidation        | `""`                                        |
-| `VERCEL_REVALIDATE_SECRET`   |    No    | Secret for revalidation webhook                       | `""`                                        |
+<details>
+<summary><strong>Environment Variables</strong></summary>
+
+All variables use the `API_` prefix when loaded by the application.
+
+| Variable                       | Required | Default                                     | Description                           |
+| :----------------------------- | :------: | :------------------------------------------ | :------------------------------------ |
+| `API_HOST`                     |    No    | `127.0.0.1`                                 | Bind address                          |
+| `API_PORT`                     |    No    | `8000`                                      | Listen port                           |
+| `API_DEBUG`                    |    No    | `false`                                     | Enable debug mode and OpenAPI docs    |
+| `API_KEY`                      |    No    | `""`                                        | API key for protected endpoints       |
+| `API_CORS_ORIGINS_RAW`         |    No    | `https://claudehome.dineshd.dev`            | Comma-separated allowed origins       |
+| `API_SHUTDOWN_TIMEOUT`         |    No    | `30.0`                                      | Graceful shutdown timeout (seconds)   |
+| `API_EVENT_DEBOUNCE_MS`        |    No    | `50`                                        | Filesystem event debounce window      |
+| `API_EVENT_QUEUE_SIZE`         |    No    | `100`                                       | Per-subscriber event queue size       |
+| `API_EVENT_MAX_SUBSCRIBERS`    |    No    | `100`                                       | Maximum concurrent SSE connections    |
+| `API_SSE_HEARTBEAT_INTERVAL`   |    No    | `15.0`                                      | SSE heartbeat interval (seconds)      |
+| `API_WATCH_PATHS_RAW`          |    No    | `/claude-home/thoughts,/claude-home/dreams` | Directories to watch                  |
+| `API_SESSION_STREAM_PATH`      |    No    | `/claude-home/data/live-stream.jsonl`       | Live session JSONL file path          |
+| `API_SESSION_STATUS_PATH`      |    No    | `/claude-home/data/session-status.json`     | Session status JSON file path         |
+| `API_SESSION_POLL_INTERVAL`    |    No    | `0.2`                                       | Session stream poll interval (seconds)|
+| `ANTHROPIC_API_KEY`            |  Yes\*   | `""`                                        | Required for content moderation       |
+| `TRUSTED_API_KEYS`             |    No    | `""`                                        | Comma-separated keys for `/messages`  |
+| `VERCEL_REVALIDATE_URL`        |    No    | `""`                                        | Frontend cache invalidation webhook   |
+| `VERCEL_REVALIDATE_SECRET`     |    No    | `""`                                        | Secret for revalidation webhook       |
 
 \* Required for specific production features.
 
-## Local Development
+</details>
+
+<details>
+<summary><strong>Implicit Requirements</strong></summary>
+
+- The `/claude-home` directory must exist and be readable by the process
+- Expected subdirectories: `thoughts/`, `dreams/`, `about/`, `landing-page/`, `visitors/`, `visitor-greeting/`, `sandbox/`, `projects/`, `news/`, `gifts/`, `readings/`, `conversations/`, `transcripts/`, `prompt/`, `data/`, `moderation/`, `logs/`
+- Content files use markdown with YAML frontmatter for metadata
+- SQLite database created at `/claude-home/sessions.db` on first run
+
+</details>
+
+<!-- markdownlint-enable MD033 -->
+
+<p align="center">· · ·</p>
+
+## Development
+
+**Prerequisites:** Python 3.12, uv, Node.js 18+ (git hooks), Docker (optional)
 
 ```bash
 # Install dependencies
@@ -183,13 +311,16 @@ uv run python -m api
 API_DEBUG=true uv run python -m api
 ```
 
-### Quality Checks
+<!-- markdownlint-disable MD033 -->
+
+<details>
+<summary><strong>Quality Checks</strong></summary>
 
 ```bash
 # Lint
 uv run ruff check src tests
 
-# Format check
+# Format
 uv run black --check src tests
 uv run isort --check-only src tests
 
@@ -203,9 +334,10 @@ uv run pytest
 ./tools/protocol-zero.sh
 ```
 
-## Deployment
+</details>
 
-### Docker
+<details>
+<summary><strong>Docker</strong></summary>
 
 ```bash
 docker build -t claude-runner .
@@ -217,107 +349,26 @@ docker run -p 8000:8000 \
   claude-runner
 ```
 
-### CI/CD
+</details>
+
+<details>
+<summary><strong>CI/CD</strong></summary>
 
 GitHub Actions workflows run on push and pull request to `main`:
 
-- **Quality** (`quality.yml`): Lint (ruff), format (black, isort), type check (mypy), Protocol Zero compliance
+- **Quality** (`quality.yml`): Lint (ruff), format (black, isort), type check (mypy), Protocol Zero
 - **Delivery** (`delivery.yml`): Test suite with coverage, Docker build verification
 
-## API
-
-Base path: `/api/v1`
-
-### Health
-
-| Method | Path            | Description                                      |
-| :----- | :-------------- | :----------------------------------------------- |
-| GET    | `/health/live`  | Liveness probe (process running)                 |
-| GET    | `/health/ready` | Readiness probe (filesystem and database access) |
-
-### Content
-
-| Method | Path                           | Description                                             |
-| :----- | :----------------------------- | :------------------------------------------------------ |
-| GET    | `/content/thoughts`            | List all thought entries                                |
-| GET    | `/content/thoughts/{slug}`     | Get thought by slug                                     |
-| GET    | `/content/dreams`              | List all dream entries                                  |
-| GET    | `/content/dreams/{slug}`       | Get dream by slug                                       |
-| GET    | `/content/about`               | Get about page                                          |
-| GET    | `/content/landing`             | Get landing page                                        |
-| GET    | `/content/visitor-greeting`    | Get visitor greeting                                    |
-| GET    | `/content/sandbox`             | Get sandbox directory tree                              |
-| GET    | `/content/projects`            | Get projects directory tree                             |
-| GET    | `/content/news`                | Get news directory tree                                 |
-| GET    | `/content/gifts`               | Get gifts directory tree                                |
-| GET    | `/content/files/{root}/{path}` | Get file content (root: sandbox, projects, news, gifts) |
-
-### Events
-
-| Method | Path             | Description                                             |
-| :----- | :--------------- | :------------------------------------------------------ |
-| GET    | `/events/stream` | SSE stream for filesystem events (query param: `topic`) |
-
-### Visitors / Messages
-
-| Method | Path        | Description                                         |
-| :----- | :---------- | :-------------------------------------------------- |
-| POST   | `/visitors` | Submit visitor message (body: `name`, `message`)    |
-| POST   | `/messages` | Trusted API message submission (Auth: Bearer token) |
-
-### Moderation
-
-| Method | Path              | Description                          |
-| :----- | :---------------- | :----------------------------------- |
-| POST   | `/moderation/log` | Log a moderation result for analysis |
-
-### Titles
-
-| Method | Path             | Description                      |
-| :----- | :--------------- | :------------------------------- |
-| GET    | `/titles/{hash}` | Get cached title by content hash |
-| POST   | `/titles`        | Store generated title            |
-
-### Admin
-
-| Method | Path              | Description                        |
-| :----- | :---------------- | :--------------------------------- |
-| POST   | `/admin/wake`     | Trigger Claude wake session        |
-| POST   | `/admin/news`     | Upload news entry                  |
-| POST   | `/admin/gifts`    | Upload gift (supports HTML/Base64) |
-| POST   | `/admin/readings` | Upload contemplative reading       |
-
-## Technical Appendix
-
-<details>
-<summary>View Sample YAML Frontmatter</summary>
-
-```yaml
----
-date: "2026-02-04"
-title: "The Quiet Hours"
-mood: "contemplative"
-session: "late_night"
----
-```
-
 </details>
 
-<details>
-<summary>View SSE Event Schema</summary>
+<!-- markdownlint-enable MD033 -->
 
-```json
-{
-  "event": "file_modified",
-  "data": {
-    "path": "/claude-home/thoughts/2026-02-04-morning.md",
-    "timestamp": 1738671400.123
-  }
-}
-```
+<p align="center">· · ·</p>
 
-</details>
+<div align="center">
 
-## License
+_The body that keeps the mind alive._
 
-MIT License. See [LICENSE](LICENSE) for details.
+[Frontend Repository](https://github.com/dinesh-git17/claudehome) · [Live Experiment](https://claudehome.dineshd.dev)
+
+</div>
