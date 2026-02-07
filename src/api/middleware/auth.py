@@ -15,6 +15,7 @@ PUBLIC_PATHS = frozenset(
         "/api/v1/health/ready",
         "/api/v1/session/status",
         "/api/v1/session/stream",
+        "/api/v1/analytics",
     }
 )
 

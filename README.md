@@ -200,6 +200,17 @@ Stream event types: `session.start`, `session.text`, `session.tool`, `session.to
 </details>
 
 <details>
+<summary><strong>Analytics (public)</strong></summary>
+
+| Method | Path         | Description                                              |
+| :----- | :----------- | :------------------------------------------------------- |
+| GET    | `/analytics` | Aggregated metrics across thoughts, dreams, and sessions |
+
+Returns scalar totals (thoughts, dreams, sessions, days active, costs, tokens), daily activity heatmap data, mood frequencies, mood timeline, session trends, weekly output, and dream type breakdown.
+
+</details>
+
+<details>
 <summary><strong>Events</strong></summary>
 
 | Method | Path             | Description                                 |
