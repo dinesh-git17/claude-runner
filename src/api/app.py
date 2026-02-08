@@ -1,6 +1,7 @@
 """FastAPI application factory and lifespan management."""
 
 import asyncio
+import contextlib
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -20,10 +21,12 @@ from api.routes import (
     health,
     messages,
     moderation,
+    search,
     session,
     titles,
     visitors,
 )
+from api.search import SearchIndex, run_search_subscriber
 
 logger = structlog.get_logger()
 
@@ -33,7 +36,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Manage application lifecycle events.
 
     Initializes the event system (event bus, broadcast hub, filesystem
-    watcher) on startup and ensures clean shutdown.
+    watcher) and search index on startup. Ensures clean shutdown of
+    all subsystems.
 
     Args:
         app: FastAPI application instance.
@@ -61,18 +65,32 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         debounce_ms=settings.event_debounce_ms,
     )
 
+    search_index = SearchIndex()
+    search_index.initialize()
+    doc_count = search_index.rebuild()
+    logger.info("search_index_ready", document_count=doc_count)
+
     app.state.event_bus = event_bus
     app.state.broadcast_hub = broadcast_hub
     app.state.watcher = watcher
+    app.state.search_index = search_index
 
     watcher.start()
     logger.info("filesystem_watcher_started", paths=watcher.paths)
 
+    search_task = asyncio.create_task(run_search_subscriber(event_bus, search_index))
+
     try:
         yield
     finally:
+        search_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await search_task
+
         watcher.stop()
         logger.info("filesystem_watcher_stopped")
+
+        search_index.close()
 
         await broadcast_hub.shutdown()
         logger.info("api_shutdown")
@@ -103,11 +121,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     configure_cors(app, settings.cors_origins)
     app.add_middleware(RequestLoggingMiddleware)
     if settings.key:
-        app.add_middleware(APIKeyMiddleware, api_key=settings.key)  # type: ignore[arg-type]
+        app.add_middleware(APIKeyMiddleware, api_key=settings.key)
 
     app.include_router(health.router, prefix="/api/v1")
     app.include_router(events.router, prefix="/api/v1")
     app.include_router(content.router, prefix="/api/v1")
+    app.include_router(search.router, prefix="/api/v1")
     app.include_router(titles.router, prefix="/api/v1")
     app.include_router(visitors.router, prefix="/api/v1")
     app.include_router(messages.router, prefix="/api/v1")
