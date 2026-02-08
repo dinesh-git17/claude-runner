@@ -10,7 +10,7 @@ from enum import Enum
 from pathlib import Path
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
 logger = structlog.get_logger()
@@ -23,6 +23,7 @@ LOG_DIR = CLAUDE_HOME / "logs"
 NEWS_DIR = CLAUDE_HOME / "news"
 GIFTS_DIR = CLAUDE_HOME / "gifts"
 READINGS_DIR = CLAUDE_HOME / "readings"
+CONVERSATIONS_DIR = CLAUDE_HOME / "conversations"
 
 MAX_GIFT_SIZE = 2 * 1024 * 1024  # 2MB
 
@@ -408,3 +409,135 @@ title: {request.title}
         filename=filename,
         path=str(filepath),
     )
+
+
+class ConversationItem(BaseModel):
+    """A single parsed conversation entry."""
+
+    filename: str = Field(description="Original filename")
+    date: str = Field(description="ISO 8601 datetime from frontmatter")
+    session_type: str = Field(description="Session type (custom, visit, etc.)")
+    message: str = Field(description="The prompt that was sent")
+    response: str = Field(description="Response text")
+
+
+class ConversationsResponse(BaseModel):
+    """Response containing recent conversations."""
+
+    conversations: list[ConversationItem]
+    total: int = Field(description="Total conversation files on disk")
+
+
+def _parse_frontmatter_simple(raw: str) -> tuple[dict[str, str], str]:
+    """Extract YAML frontmatter and body from a markdown file.
+
+    Splits on ``---`` delimiters and parses simple key-value pairs.
+
+    Args:
+        raw: Full file content.
+
+    Returns:
+        Tuple of (frontmatter dict, body text).
+    """
+    if not raw.startswith("---"):
+        return {}, raw
+
+    parts = raw.split("---", 2)
+    if len(parts) < 3:
+        return {}, raw
+
+    meta: dict[str, str] = {}
+    for line in parts[1].strip().splitlines():
+        if ":" in line:
+            key, _, value = line.partition(":")
+            meta[key.strip()] = value.strip().strip('"').strip("'")
+
+    return meta, parts[2]
+
+
+def _parse_conversation(filepath: Path) -> ConversationItem | None:
+    """Parse a conversation markdown file into structured data.
+
+    Args:
+        filepath: Absolute path to the conversation .md file.
+
+    Returns:
+        ConversationItem if parsing succeeds, None otherwise.
+    """
+    try:
+        raw = filepath.read_text(encoding="utf-8")
+    except OSError:
+        return None
+
+    meta, body = _parse_frontmatter_simple(raw)
+
+    message = ""
+    response = ""
+    current_section: str | None = None
+
+    for line in body.split("\n"):
+        stripped = line.strip()
+        if stripped == "## Message":
+            current_section = "message"
+            continue
+        elif stripped == "## Response":
+            current_section = "response"
+            continue
+
+        if current_section == "message":
+            message += line + "\n"
+        elif current_section == "response":
+            response += line + "\n"
+
+    return ConversationItem(
+        filename=filepath.name,
+        date=meta.get("date", ""),
+        session_type=meta.get("type", "unknown"),
+        message=message.strip(),
+        response=response.strip(),
+    )
+
+
+@router.get("/conversations", response_model=ConversationsResponse)
+async def list_conversations(
+    limit: int = Query(default=10, ge=1, le=50),
+) -> ConversationsResponse:
+    """List recent conversations sorted by date descending.
+
+    Args:
+        limit: Maximum number of conversations to return.
+
+    Returns:
+        Parsed conversations and total count.
+    """
+    if not CONVERSATIONS_DIR.exists():
+        return ConversationsResponse(conversations=[], total=0)
+
+    try:
+        all_files = sorted(
+            [
+                f
+                for f in CONVERSATIONS_DIR.iterdir()
+                if f.suffix == ".md" and f.is_file()
+            ],
+            key=lambda f: f.name,
+            reverse=True,
+        )
+    except OSError as e:
+        logger.error("conversations_list_failed", error=str(e))
+        raise HTTPException(
+            status_code=500, detail="Failed to list conversations"
+        ) from e
+
+    total = len(all_files)
+    candidates = all_files[: limit * 2]
+
+    conversations: list[ConversationItem] = []
+    for filepath in candidates:
+        if len(conversations) >= limit:
+            break
+        parsed = _parse_conversation(filepath)
+        if parsed:
+            conversations.append(parsed)
+
+    return ConversationsResponse(conversations=conversations, total=total)
