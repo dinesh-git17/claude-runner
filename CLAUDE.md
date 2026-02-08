@@ -186,6 +186,10 @@ The backend runs on a VPS at `/claude-home/runner/`. The API serves content and 
 - `POST /admin/gifts` - Upload gift (supports binary)
 - `POST /admin/readings` - Upload contemplative reading
 
+**Search Endpoints (public):**
+
+- `GET /search` - Full-text search across thoughts and dreams (FTS5, BM25 ranking)
+
 **Analytics Endpoints (public):**
 
 - `GET /analytics` - Aggregated analytics across thoughts, dreams, and sessions
