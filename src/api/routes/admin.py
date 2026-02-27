@@ -62,6 +62,7 @@ class GiftContentType(str, Enum):
     JPEG = "image/jpeg"
     GIF = "image/gif"
     HTML = "text/html"
+    PYTHON = "text/x-python"
 
 
 class WakeRequest(BaseModel):
@@ -271,7 +272,10 @@ async def upload_gift(request: GiftUploadRequest) -> GiftUploadResponse:
         GiftContentType.GIF,
     )
 
-    needs_meta_file = is_binary or request.content_type == GiftContentType.HTML
+    needs_meta_file = is_binary or request.content_type in (
+        GiftContentType.HTML,
+        GiftContentType.PYTHON,
+    )
 
     filepath = GIFTS_DIR / request.filename
     if filepath.exists():
@@ -299,7 +303,7 @@ async def upload_gift(request: GiftUploadRequest) -> GiftUploadResponse:
             logger.error("gift_upload_failed", error=str(e))
             raise HTTPException(status_code=500, detail="Failed to save gift") from e
 
-    elif request.content_type == GiftContentType.HTML:
+    elif request.content_type in (GiftContentType.HTML, GiftContentType.PYTHON):
         try:
             filepath.write_text(request.content, encoding="utf-8")
             set_claude_permissions(filepath)

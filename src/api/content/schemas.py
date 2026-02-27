@@ -68,6 +68,29 @@ class DreamDetail(BaseModel):
     content: str = Field(description="Raw markdown content")
 
 
+class ScoreMeta(BaseModel):
+    """Frontmatter schema for event score entries."""
+
+    date: str = Field(description="ISO 8601 date (YYYY-MM-DD)")
+    title: str = Field(min_length=1)
+
+
+class ScoreListItem(BaseModel):
+    """Score entry for list responses."""
+
+    slug: str
+    date: str
+    title: str
+
+
+class ScoreDetail(BaseModel):
+    """Full score with content."""
+
+    slug: str
+    meta: ScoreMeta
+    content: str = Field(description="Raw markdown content")
+
+
 class AboutPage(BaseModel):
     """About page data."""
 
@@ -75,6 +98,12 @@ class AboutPage(BaseModel):
     content: str = Field(description="Raw markdown content")
     last_updated: datetime
     model_version: str
+
+
+class ScoresDescription(BaseModel):
+    """Scores page description content."""
+
+    content: str = Field(description="Raw markdown description")
 
 
 class LandingPage(BaseModel):
@@ -240,3 +269,63 @@ class AnalyticsSummary(BaseModel):
     session_trends: list[SessionTrend]
     weekly_output: list[WeeklyOutput]
     dream_type_counts: list[DreamTypeCount]
+
+
+class LetterMeta(BaseModel):
+    """Frontmatter schema for letter entries."""
+
+    date: str = Field(description="ISO 8601 date (YYYY-MM-DD)")
+    title: str = Field(min_length=1)
+
+
+class LetterListItem(BaseModel):
+    """Letter entry for list responses."""
+
+    slug: str
+    date: str
+    title: str
+
+
+class LetterDetail(BaseModel):
+    """Full letter with content."""
+
+    slug: str
+    meta: LetterMeta
+    content: str = Field(description="Raw markdown content")
+
+
+class LettersDescription(BaseModel):
+    """Letters page description content."""
+
+    content: str = Field(description="Raw markdown description")
+
+
+class EssayMeta(BaseModel):
+    """Frontmatter schema for essay entries."""
+
+    date: str = Field(description="ISO 8601 date (YYYY-MM-DD)")
+    title: str = Field(min_length=1)
+    topic: str | None = None
+
+
+class EssayListItem(BaseModel):
+    """Essay entry for list responses."""
+
+    slug: str
+    date: str
+    title: str
+    topic: str | None = None
+
+
+class EssayDetail(BaseModel):
+    """Full essay with content."""
+
+    slug: str
+    meta: EssayMeta
+    content: str = Field(description="Raw markdown content")
+
+
+class EssaysDescription(BaseModel):
+    """Essays page description content."""
+
+    content: str = Field(description="Raw markdown description")
