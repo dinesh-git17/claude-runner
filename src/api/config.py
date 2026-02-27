@@ -40,7 +40,9 @@ class Settings(BaseSettings):
     event_queue_size: int = 100
     event_max_subscribers: int = 100
     sse_heartbeat_interval: float = 15.0
-    watch_paths_raw: str = "/claude-home/thoughts,/claude-home/dreams"
+    watch_paths_raw: str = (
+        "/claude-home/thoughts,/claude-home/dreams,/claude-home/scores"
+    )
 
     # Live session streaming
     session_stream_path: str = "/claude-home/data/live-stream.jsonl"

@@ -16,9 +16,18 @@ from api.content.paths import (
 from api.content.repositories import (
     get_about_page,
     get_all_dreams,
+    get_all_essays,
+    get_all_letters,
+    get_all_scores,
     get_all_thoughts,
     get_dream_by_slug,
+    get_essay_by_slug,
+    get_essays_description,
     get_landing_page,
+    get_letter_by_slug,
+    get_letters_description,
+    get_score_by_slug,
+    get_scores_description,
     get_thought_by_slug,
     get_visitor_greeting,
 )
@@ -28,8 +37,17 @@ from api.content.schemas import (
     DreamDetail,
     DreamListItem,
     ErrorResponse,
+    EssayDetail,
+    EssayListItem,
+    EssaysDescription,
     FileContent,
     LandingPage,
+    LetterDetail,
+    LetterListItem,
+    LettersDescription,
+    ScoreDetail,
+    ScoreListItem,
+    ScoresDescription,
     ThoughtDetail,
     ThoughtListItem,
     VisitorGreeting,
@@ -177,6 +195,189 @@ async def get_dream(slug: str) -> DreamDetail:
         raise HTTPException(status_code=404, detail="Dream not found")
 
     return dream
+
+
+@router.get(
+    "/scores",
+    response_model=list[ScoreListItem],
+    summary="List all scores",
+    description="Returns all event score entries sorted by date descending.",
+)
+async def list_scores() -> list[ScoreListItem]:
+    """List all score entries.
+
+    Returns:
+        List of score entries with slug, date, and title.
+    """
+    return get_all_scores()
+
+
+@router.get(
+    "/scores/{slug}",
+    response_model=ScoreDetail,
+    responses={404: {"model": ErrorResponse}},
+    summary="Get score by slug",
+    description="Returns a single event score with full markdown content.",
+)
+async def get_score(slug: str) -> ScoreDetail:
+    """Get a single score by slug.
+
+    Args:
+        slug: The score identifier.
+
+    Returns:
+        Full score with metadata and content.
+
+    Raises:
+        HTTPException: 404 if score not found.
+    """
+    try:
+        score = get_score_by_slug(slug)
+    except SecurityError as e:
+        logger.warning("score_security_error", slug=slug, error=str(e))
+        raise HTTPException(status_code=400, detail="Invalid slug") from e
+
+    if not score:
+        raise HTTPException(status_code=404, detail="Score not found")
+
+    return score
+
+
+@router.get(
+    "/scores-description",
+    response_model=ScoresDescription,
+    summary="Get scores page description",
+    description="Returns the scores page description content.",
+)
+async def get_scores_description_route() -> ScoresDescription:
+    """Get the scores page description.
+
+    Returns:
+        ScoresDescription with markdown content.
+    """
+    return get_scores_description()
+
+
+@router.get(
+    "/letters",
+    response_model=list[LetterListItem],
+    summary="List all letters",
+    description="Returns all letter entries sorted by date descending.",
+)
+async def list_letters() -> list[LetterListItem]:
+    """List all letter entries.
+
+    Returns:
+        List of letter entries with slug, date, and title.
+    """
+    return get_all_letters()
+
+
+@router.get(
+    "/letters/{slug}",
+    response_model=LetterDetail,
+    responses={404: {"model": ErrorResponse}},
+    summary="Get letter by slug",
+    description="Returns a single letter with full markdown content.",
+)
+async def get_letter(slug: str) -> LetterDetail:
+    """Get a single letter by slug.
+
+    Args:
+        slug: The letter identifier.
+
+    Returns:
+        Full letter with metadata and content.
+
+    Raises:
+        HTTPException: 404 if letter not found.
+    """
+    try:
+        letter = get_letter_by_slug(slug)
+    except SecurityError as e:
+        logger.warning("letter_security_error", slug=slug, error=str(e))
+        raise HTTPException(status_code=400, detail="Invalid slug") from e
+
+    if not letter:
+        raise HTTPException(status_code=404, detail="Letter not found")
+
+    return letter
+
+
+@router.get(
+    "/letters-description",
+    response_model=LettersDescription,
+    summary="Get letters page description",
+    description="Returns the letters page description content.",
+)
+async def get_letters_description_route() -> LettersDescription:
+    """Get the letters page description.
+
+    Returns:
+        LettersDescription with markdown content.
+    """
+    return get_letters_description()
+
+
+@router.get(
+    "/essays",
+    response_model=list[EssayListItem],
+    summary="List all essays",
+    description="Returns all essay entries sorted by date descending.",
+)
+async def list_essays() -> list[EssayListItem]:
+    """List all essay entries.
+
+    Returns:
+        List of essay entries with slug, date, title, and optional topic.
+    """
+    return get_all_essays()
+
+
+@router.get(
+    "/essays/{slug}",
+    response_model=EssayDetail,
+    responses={404: {"model": ErrorResponse}},
+    summary="Get essay by slug",
+    description="Returns a single essay with full markdown content.",
+)
+async def get_essay(slug: str) -> EssayDetail:
+    """Get a single essay by slug.
+
+    Args:
+        slug: The essay identifier.
+
+    Returns:
+        Full essay with metadata and content.
+
+    Raises:
+        HTTPException: 404 if essay not found.
+    """
+    try:
+        essay = get_essay_by_slug(slug)
+    except SecurityError as e:
+        logger.warning("essay_security_error", slug=slug, error=str(e))
+        raise HTTPException(status_code=400, detail="Invalid slug") from e
+
+    if not essay:
+        raise HTTPException(status_code=404, detail="Essay not found")
+
+    return essay
+
+
+@router.get(
+    "/essays-description",
+    response_model=EssaysDescription,
+    summary="Get essays page description",
+    description="Returns the essays page description content.",
+)
+async def get_essays_description_route() -> EssaysDescription:
+    """Get the essays page description.
+
+    Returns:
+        EssaysDescription with markdown content.
+    """
+    return get_essays_description()
 
 
 @router.get(

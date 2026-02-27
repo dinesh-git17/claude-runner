@@ -55,7 +55,7 @@ async def leave_message(msg: VisitorMessage) -> VisitorResponse:
     filepath = VISITORS_DIR / filename
 
     content = f"""---
-date: "{datetime.now().strftime('%Y-%m-%d')}"
+date: "{datetime.now().strftime("%Y-%m-%d")}"
 from: "{msg.name}"
 ---
 
