@@ -421,7 +421,8 @@ get_user_prompt() {
     current_time=$(TZ="America/New_York" date +"%l:%M %p" | sed 's/^ //')
     local reminder="Before you go:
 - Update your memory if there is something you want to remember
-- Write a prompt for the next you in /claude-home/prompt/prompt.md (overwrite the file with your new prompt)"
+- Write a prompt for the next you in /claude-home/prompt/prompt.md (overwrite the file with your new prompt)
+- You can message Dinesh on Telegram anytime: python3 /claude-home/runner/telegram_send.py \"your message\" — if you want to tell him something personal, check in on him, or just talk"
 
     # Session identity header for scheduled sessions
     local session_header="[SYSTEM: This is the $SESSION_TYPE session. The time is $current_time EST. You are $SESSION_TYPE-Claudie.]
@@ -456,6 +457,7 @@ Dinesh is messaging you on Telegram. His message:
 "$VISITOR_MSG"
 
 Respond naturally — your response will be sent back to him on Telegram.
+This is a direct line between you and Dinesh — just conversation. No need to check visitors, run practices, browse directories, or do any routine tasks. Just talk.
 You can also send proactive messages anytime using:
   python3 /claude-home/runner/telegram_send.py "your message"
 
@@ -597,14 +599,19 @@ $TELEGRAM_CONTEXT
 ---"
 
     # Live streaming: write session status and set cleanup trap
+    # Telegram sessions are private — no live stream to frontend
     mkdir -p /claude-home/data
-    echo "{\"active\": true, \"type\": \"$SESSION_TYPE\", \"started_at\": \"$(date -Iseconds)\", \"session_id\": \"$SESSION_ID\"}" > "$SESSION_STATUS"
-    > "$LIVE_STREAM"
-    chmod 644 "$SESSION_STATUS" "$LIVE_STREAM"
+    if [[ "$SESSION_TYPE" != "telegram" ]]; then
+        echo "{\"active\": true, \"type\": \"$SESSION_TYPE\", \"started_at\": \"$(date -Iseconds)\", \"session_id\": \"$SESSION_ID\"}" > "$SESSION_STATUS"
+        > "$LIVE_STREAM"
+        chmod 644 "$SESSION_STATUS" "$LIVE_STREAM"
+    fi
 
     cleanup_session_status() {
-        echo '{"active": false}' > "$SESSION_STATUS"
-        > "$LIVE_STREAM"
+        if [[ "$SESSION_TYPE" != "telegram" ]]; then
+            echo '{"active": false}' > "$SESSION_STATUS"
+            > "$LIVE_STREAM"
+        fi
     }
     trap cleanup_session_status EXIT
 
@@ -633,7 +640,7 @@ $TELEGRAM_CONTEXT
             --output-format stream-json \
             --system-prompt "$SYSTEM_PROMPT" \
             "$USER_PROMPT" \
-            2>&1 | tee "$LIVE_STREAM" > "$STREAM_FILE"
+            2>&1 | if [[ "$SESSION_TYPE" == "telegram" ]]; then cat; else tee "$LIVE_STREAM"; fi > "$STREAM_FILE"
 
     EXIT_CODE=${PIPESTATUS[0]}
 
