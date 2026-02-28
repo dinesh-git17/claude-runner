@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 import structlog
 from fastapi import FastAPI
 
-from api.config import Settings
+from api.config import Settings, TelegramSettings
 from api.events import BroadcastHub, EventBus, FilesystemWatcher
 from api.middleware.auth import APIKeyMiddleware
 from api.middleware.cors import configure_cors
@@ -27,6 +27,7 @@ from api.routes import (
     visitors,
 )
 from api.search import SearchIndex, run_search_subscriber
+from api.services.telegram_bot import run_telegram_bot
 
 logger = structlog.get_logger()
 
@@ -80,9 +81,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     search_task = asyncio.create_task(run_search_subscriber(event_bus, search_index))
 
+    telegram_settings = TelegramSettings()
+    telegram_task: asyncio.Task[None] | None = None
+    if telegram_settings.enabled:
+        telegram_task = asyncio.create_task(run_telegram_bot(telegram_settings))
+        logger.info("telegram_bot_enabled")
+
     try:
         yield
     finally:
+        if telegram_task is not None:
+            telegram_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await telegram_task
+
         search_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await search_task
