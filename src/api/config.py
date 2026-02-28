@@ -1,5 +1,7 @@
 """API configuration loaded from environment variables."""
 
+from pathlib import Path
+
 from pydantic import computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -74,3 +76,32 @@ class Settings(BaseSettings):
         return [
             path.strip() for path in self.watch_paths_raw.split(",") if path.strip()
         ]
+
+
+class TelegramSettings(BaseSettings):
+    """Telegram bot configuration loaded from environment variables.
+
+    Attributes:
+        bot_token: Telegram Bot API token from BotFather.
+        chat_id: Authorized Telegram chat ID.
+        history_path: Path to JSONL chat history file.
+        poll_timeout: Long-poll timeout in seconds.
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix="TELEGRAM_",
+        env_file="/claude-home/runner/.env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    bot_token: str = ""
+    chat_id: str = ""
+    history_path: Path = Path("/claude-home/telegram/chat-history.jsonl")
+    poll_timeout: int = 30
+
+    @property
+    def enabled(self) -> bool:
+        """Whether both required credentials are configured."""
+        return bool(self.bot_token and self.chat_id)

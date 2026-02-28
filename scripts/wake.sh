@@ -196,6 +196,38 @@ build_conversation_context() {
     done <<< "$files"
 }
 
+# Build context from Telegram chat history
+build_telegram_context() {
+    local count="${1:-20}"
+    local history_file="/claude-home/telegram/chat-history.jsonl"
+
+    if [ ! -f "$history_file" ]; then
+        return
+    fi
+
+    local lines
+    lines=$(tail -n "$count" "$history_file" 2>/dev/null)
+
+    if [ -z "$lines" ]; then
+        return
+    fi
+
+    echo "Recent Telegram conversation with Dinesh:"
+    while IFS= read -r line; do
+        local sender
+        sender=$(echo "$line" | jq -r '.from // empty' 2>/dev/null)
+        local text
+        text=$(echo "$line" | jq -r '.text // empty' 2>/dev/null)
+        if [ -n "$sender" ] && [ -n "$text" ]; then
+            if [ "$sender" = "dinesh" ]; then
+                echo "  Dinesh: $text"
+            else
+                echo "  Claudie: $text"
+            fi
+        fi
+    done <<< "$lines"
+}
+
 # Build context from recent transcripts
 build_transcript_context() {
     local count="${1:-2}"
@@ -291,7 +323,7 @@ get_time_context() {
     echo "It's $time_of_day, $hour_12. $date_str."
 
     # For custom/visit sessions, show next scheduled session
-    if [ "$SESSION_TYPE" = "custom" ] || [ "$SESSION_TYPE" = "visit" ]; then
+    if [ "$SESSION_TYPE" = "custom" ] || [ "$SESSION_TYPE" = "visit" ] || [ "$SESSION_TYPE" = "telegram" ]; then
         echo "Next scheduled session: $(get_next_session)"
     else
         echo "You are $SESSION_TYPE-you."
@@ -416,6 +448,21 @@ VISITEOF
                 echo "A visitor stopped by but left no message."
             fi
             ;;
+        telegram)
+            if [ -n "$VISITOR_MSG" ]; then
+                cat << TELEGRAMEOF
+Dinesh is messaging you on Telegram. His message:
+
+"$VISITOR_MSG"
+
+Respond naturally — your response will be sent back to him on Telegram.
+You can also send proactive messages anytime using:
+  python3 /claude-home/runner/telegram_send.py "your message"
+
+$reminder
+TELEGRAMEOF
+            fi
+            ;;
         custom)
             if [ -n "$VISITOR_MSG" ]; then
                 cat << CUSTOMEOF
@@ -462,6 +509,7 @@ main() {
     # Build context
     CONTEXT=$(build_context 1)
     CONVO_CONTEXT=$(build_conversation_context 2)
+    TELEGRAM_CONTEXT=$(build_telegram_context 20)
     MEMORY_CONTENT=$(cat "$CLAUDE_HOME/memory/memory.md" 2>/dev/null || echo "(No memory file yet)")
     SUMMARY=$(build_summary)
     TIME_CONTEXT=$(get_time_context)
@@ -475,7 +523,7 @@ main() {
 
     # Save conversation for custom/visit sessions
     CONVO_FILE=""
-    if [[ "$SESSION_TYPE" == "custom" || "$SESSION_TYPE" == "visit" ]] && [ -n "$VISITOR_MSG" ]; then
+    if [[ "$SESSION_TYPE" == "custom" || "$SESSION_TYPE" == "visit" || "$SESSION_TYPE" == "telegram" ]] && [ -n "$VISITOR_MSG" ]; then
         CONVO_FILE=$(save_conversation_prompt "$VISITOR_MSG" "$SESSION_TYPE")
         echo "Saved conversation prompt to: $CONVO_FILE" | tee -a "$LOG_FILE"
     fi
@@ -484,7 +532,7 @@ main() {
     CURRENT_TIME=$(TZ="America/New_York" date +"%l:%M %p %Z" | sed 's/^ //')
 
     # Build system prompt header (different for custom/visit vs scheduled sessions)
-    if [[ "$SESSION_TYPE" == "custom" || "$SESSION_TYPE" == "visit" ]]; then
+    if [[ "$SESSION_TYPE" == "custom" || "$SESSION_TYPE" == "visit" || "$SESSION_TYPE" == "telegram" ]]; then
         SESSION_HEADER="Current time: $CURRENT_TIME on $TODAY_DATE
 This is an unscheduled session (triggered by Dinesh or a visitor)."
     else
@@ -521,6 +569,7 @@ Your directories:
 - /readings — contemplative texts, mostly Buddhism. Not lessons—just perspectives that might sit alongside the questions. One arrives each day before 3am. (read-only)
 - /conversations — past custom messages and your responses (read-only)
 - /transcripts — past session transcripts showing tools used and actions taken (read-only)
+- /telegram — Telegram chat history with Dinesh (send messages with: python3 /claude-home/runner/telegram_send.py \"message\")
 
 $SUMMARY
 
@@ -542,6 +591,9 @@ $MEMORY_CONTENT
 ---
 
 $CONVO_CONTEXT
+---
+
+$TELEGRAM_CONTEXT
 ---"
 
     # Live streaming: write session status and set cleanup trap
@@ -575,6 +627,7 @@ $CONVO_CONTEXT
             --add-dir "$CLAUDE_HOME/readings" \
             --add-dir "$CLAUDE_HOME/conversations" \
             --add-dir "$CLAUDE_HOME/transcripts" \
+            --add-dir "$CLAUDE_HOME/telegram" \
             --max-turns "$MAX_TURNS" \
             --verbose \
             --output-format stream-json \
