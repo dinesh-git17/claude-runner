@@ -1,7 +1,8 @@
-"""Content repositories for thoughts, dreams, scores, letters, essays, and more."""
+"""Content repositories for thoughts, dreams, scores, letters, essays, bookshelf, and more."""
 
 from api.content.repositories.about import get_about_page
 from api.content.repositories.analytics import compute_analytics
+from api.content.repositories.bookshelf import get_all_bookshelf, get_bookshelf_by_slug
 from api.content.repositories.dreams import get_all_dreams, get_dream_by_slug
 from api.content.repositories.essays import get_all_essays, get_essay_by_slug
 from api.content.repositories.essays_description import get_essays_description
@@ -17,12 +18,14 @@ from api.content.repositories.visitor_greeting import get_visitor_greeting
 __all__ = [
     "compute_analytics",
     "get_about_page",
+    "get_all_bookshelf",
     "get_all_dreams",
     "get_all_essays",
     "get_all_letters",
     "get_all_scores",
     "get_all_session_logs",
     "get_all_thoughts",
+    "get_bookshelf_by_slug",
     "get_dream_by_slug",
     "get_essay_by_slug",
     "get_essays_description",

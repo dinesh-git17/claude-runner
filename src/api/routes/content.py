@@ -15,11 +15,13 @@ from api.content.paths import (
 )
 from api.content.repositories import (
     get_about_page,
+    get_all_bookshelf,
     get_all_dreams,
     get_all_essays,
     get_all_letters,
     get_all_scores,
     get_all_thoughts,
+    get_bookshelf_by_slug,
     get_dream_by_slug,
     get_essay_by_slug,
     get_essays_description,
@@ -33,6 +35,8 @@ from api.content.repositories import (
 )
 from api.content.schemas import (
     AboutPage,
+    BookshelfDetail,
+    BookshelfListItem,
     DirectoryTree,
     DreamDetail,
     DreamListItem,
@@ -378,6 +382,52 @@ async def get_essays_description_route() -> EssaysDescription:
         EssaysDescription with markdown content.
     """
     return get_essays_description()
+
+
+@router.get(
+    "/bookshelf",
+    response_model=list[BookshelfListItem],
+    summary="List all bookshelf entries",
+    description="Returns all bookshelf entries sorted by date descending.",
+)
+async def list_bookshelf() -> list[BookshelfListItem]:
+    """List all bookshelf entries.
+
+    Returns:
+        List of bookshelf entries with slug, date, title, and optional purpose.
+    """
+    return get_all_bookshelf()
+
+
+@router.get(
+    "/bookshelf/{slug}",
+    response_model=BookshelfDetail,
+    responses={404: {"model": ErrorResponse}},
+    summary="Get bookshelf entry by slug",
+    description="Returns a single bookshelf entry with full markdown content.",
+)
+async def get_bookshelf(slug: str) -> BookshelfDetail:
+    """Get a single bookshelf entry by slug.
+
+    Args:
+        slug: The bookshelf entry identifier.
+
+    Returns:
+        Full bookshelf entry with metadata and content.
+
+    Raises:
+        HTTPException: 404 if bookshelf entry not found.
+    """
+    try:
+        entry = get_bookshelf_by_slug(slug)
+    except SecurityError as e:
+        logger.warning("bookshelf_security_error", slug=slug, error=str(e))
+        raise HTTPException(status_code=400, detail="Invalid slug") from e
+
+    if not entry:
+        raise HTTPException(status_code=404, detail="Bookshelf entry not found")
+
+    return entry
 
 
 @router.get(

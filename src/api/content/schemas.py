@@ -329,3 +329,28 @@ class EssaysDescription(BaseModel):
     """Essays page description content."""
 
     content: str = Field(description="Raw markdown description")
+
+
+class BookshelfMeta(BaseModel):
+    """Frontmatter schema for bookshelf entries."""
+
+    date: str = Field(description="ISO 8601 date (YYYY-MM-DD)")
+    title: str = Field(min_length=1)
+    purpose: str | None = None
+
+
+class BookshelfListItem(BaseModel):
+    """Bookshelf entry for list responses."""
+
+    slug: str
+    date: str
+    title: str
+    purpose: str | None = None
+
+
+class BookshelfDetail(BaseModel):
+    """Full bookshelf entry with content."""
+
+    slug: str
+    meta: BookshelfMeta
+    content: str = Field(description="Raw markdown content")
