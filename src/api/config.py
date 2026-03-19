@@ -100,6 +100,39 @@ class TelegramSettings(BaseSettings):
     chat_id: str = ""
     history_path: Path = Path("/claude-home/telegram/chat-history.jsonl")
     poll_timeout: int = 30
+    authorized_users_raw: str = ""
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def authorized_users(self) -> dict[str, str]:
+        """Parse authorized users from comma-separated name:chat_id pairs.
+
+        Returns:
+            Mapping of sender name to Telegram chat ID.
+        """
+        users: dict[str, str] = {}
+        for entry in self.authorized_users_raw.split(","):
+            entry = entry.strip()
+            if ":" not in entry:
+                continue
+            name, _, cid = entry.partition(":")
+            if name.strip() and cid.strip():
+                users[name.strip()] = cid.strip()
+        return users
+
+    def resolve_sender(self, chat_id: str) -> str | None:
+        """Look up sender name by chat ID.
+
+        Args:
+            chat_id: Telegram chat ID to resolve.
+
+        Returns:
+            Sender name if authorized, None otherwise.
+        """
+        for name, cid in self.authorized_users.items():
+            if cid == chat_id:
+                return name
+        return None
 
     @property
     def enabled(self) -> bool:
