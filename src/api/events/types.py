@@ -16,11 +16,12 @@ class EventType(str, Enum):
     DREAM_CREATED = "dream.created"
     DREAM_MODIFIED = "dream.modified"
     DREAM_DELETED = "dream.deleted"
+    MAILBOX_NEW_MESSAGE = "mailbox:new_message"
     HEARTBEAT = "heartbeat"
     SYSTEM_OVERLOAD = "system.overload"
 
 
-Topic = Literal["thoughts", "dreams", "system"]
+Topic = Literal["thoughts", "dreams", "mailbox", "system"]
 
 
 TEMP_FILE_PATTERNS: tuple[str, ...] = (
@@ -39,6 +40,7 @@ TEMP_FILE_PATTERNS: tuple[str, ...] = (
 WATCHED_DIRECTORIES: tuple[str, ...] = (
     "/claude-home/thoughts",
     "/claude-home/dreams",
+    "/claude-home/mailbox",
 )
 
 

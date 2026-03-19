@@ -10,6 +10,7 @@ from watchdog.events import (
     FileCreatedEvent,
     FileDeletedEvent,
     FileModifiedEvent,
+    FileMovedEvent,
     FileSystemEvent,
 )
 
@@ -56,6 +57,8 @@ def determine_topic(path: str) -> Topic | None:
         return "thoughts"
     if "/dreams" in path:
         return "dreams"
+    if "/mailbox" in path:
+        return "mailbox"
     return None
 
 
@@ -64,6 +67,9 @@ def determine_event_type(
     topic: Topic,
 ) -> EventType | None:
     """Determine domain event type from raw filesystem event.
+
+    Moved events are treated as creations since Claude Code CLI uses
+    atomic writes (write to temp file, then rename to final path).
 
     Args:
         raw_event: Watchdog filesystem event.
@@ -76,9 +82,14 @@ def determine_event_type(
         (FileCreatedEvent, "thoughts"): EventType.THOUGHT_CREATED,
         (FileModifiedEvent, "thoughts"): EventType.THOUGHT_MODIFIED,
         (FileDeletedEvent, "thoughts"): EventType.THOUGHT_DELETED,
+        (FileMovedEvent, "thoughts"): EventType.THOUGHT_CREATED,
         (FileCreatedEvent, "dreams"): EventType.DREAM_CREATED,
         (FileModifiedEvent, "dreams"): EventType.DREAM_MODIFIED,
         (FileDeletedEvent, "dreams"): EventType.DREAM_DELETED,
+        (FileMovedEvent, "dreams"): EventType.DREAM_CREATED,
+        (FileCreatedEvent, "mailbox"): EventType.MAILBOX_NEW_MESSAGE,
+        (FileModifiedEvent, "mailbox"): EventType.MAILBOX_NEW_MESSAGE,
+        (FileMovedEvent, "mailbox"): EventType.MAILBOX_NEW_MESSAGE,
     }
 
     return type_map.get((type(raw_event), topic))
@@ -88,7 +99,8 @@ def normalize_event(raw_event: FileSystemEvent) -> DomainEvent | None:
     """Transform raw filesystem event into typed domain event.
 
     Performs validation, extracts metadata, and creates a strongly typed
-    domain event suitable for the event bus.
+    domain event suitable for the event bus. For move/rename events
+    (atomic writes), uses the destination path.
 
     Args:
         raw_event: Raw watchdog filesystem event.
@@ -96,12 +108,15 @@ def normalize_event(raw_event: FileSystemEvent) -> DomainEvent | None:
     Returns:
         Normalized domain event if valid, None if event should be dropped.
     """
-    src_path = raw_event.src_path
-    if isinstance(src_path, str):
-        path_str = src_path
+    if isinstance(raw_event, FileMovedEvent):
+        path = Path(raw_event.dest_path)
     else:
-        path_str = bytes(src_path).decode("utf-8", errors="replace")
-    path = Path(path_str)
+        src_path = raw_event.src_path
+        if isinstance(src_path, str):
+            path_str = src_path
+        else:
+            path_str = bytes(src_path).decode("utf-8", errors="replace")
+        path = Path(path_str)
     topic = determine_topic(str(path))
 
     if topic is None:
@@ -111,6 +126,26 @@ def normalize_event(raw_event: FileSystemEvent) -> DomainEvent | None:
     event_type = determine_event_type(raw_event, topic)
     if event_type is None:
         return None
+
+    if topic == "mailbox":
+        parts = path.parts
+        try:
+            mailbox_idx = parts.index("mailbox")
+            username = parts[mailbox_idx + 1] if mailbox_idx + 1 < len(parts) else None
+        except (ValueError, IndexError):
+            username = None
+
+        if username is None:
+            return None
+
+        return DomainEvent(
+            id=str(uuid.uuid4()),
+            type=event_type,
+            timestamp=datetime.now(UTC),
+            topic=topic,
+            path=path.name,
+            slug=username,
+        )
 
     slug = extract_slug(path.name)
     if slug is None:
