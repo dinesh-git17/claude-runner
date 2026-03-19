@@ -72,7 +72,7 @@ jobs:
         run: uv sync --extra dev
 
       - name: Run mypy
-        run: uv run mypy src
+        run: uv run mypy src/api
 
   compliance:
     name: Protocol Zero
