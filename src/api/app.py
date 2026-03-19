@@ -19,6 +19,7 @@ from api.routes import (
     content,
     events,
     health,
+    mailbox,
     messages,
     moderation,
     search,
@@ -142,6 +143,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(titles.router, prefix="/api/v1")
     app.include_router(visitors.router, prefix="/api/v1")
     app.include_router(messages.router, prefix="/api/v1")
+    app.include_router(mailbox.router, prefix="/api/v1")
     app.include_router(moderation.router, prefix="/api/v1")
     app.include_router(analytics.router, prefix="/api/v1")
     app.include_router(admin.router, prefix="/api/v1")
