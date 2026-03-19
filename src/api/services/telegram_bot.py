@@ -10,7 +10,8 @@ from typing import TYPE_CHECKING
 import structlog
 
 from api.services.chat_history import append_message
-from api.services.telegram import TelegramClient
+from api.services.image_optimizer import optimize_image
+from api.services.telegram import TelegramClient, TelegramMessage
 
 if TYPE_CHECKING:
     from api.config import TelegramSettings
@@ -76,6 +77,73 @@ def _extract_response(conversations_dir: Path) -> str:
     return response if response else "(Session completed but no response captured)"
 
 
+async def _download_and_optimize(
+    client: TelegramClient,
+    message: TelegramMessage,
+    sender: str,
+) -> Path | None:
+    """Download the largest photo from a message and optimize it.
+
+    Args:
+        client: Telegram API client.
+        message: Telegram message containing photos.
+        sender: Name of the sender.
+
+    Returns:
+        Path to the optimized image, or None on failure.
+    """
+    if not message.photo:
+        return None
+
+    largest = max(message.photo, key=lambda p: p.width * p.height)
+    file_path = await client.get_file_path(largest.file_id)
+    if not file_path:
+        logger.warning("telegram_photo_get_file_failed", file_id=largest.file_id)
+        return None
+
+    raw_bytes = await client.download_file(file_path)
+    if not raw_bytes:
+        logger.warning("telegram_photo_download_failed", path=file_path)
+        return None
+
+    try:
+        optimized_path = optimize_image(raw_bytes, sender)
+        logger.info(
+            "telegram_photo_saved",
+            sender=sender,
+            path=str(optimized_path),
+            original_size=len(raw_bytes),
+        )
+        return optimized_path
+    except Exception as exc:
+        logger.error("telegram_photo_optimize_failed", error=str(exc))
+        return None
+
+
+def _build_wake_message(
+    text: str | None,
+    caption: str | None,
+    image_path: Path | None,
+) -> str | None:
+    """Build the message string passed to wake.sh.
+
+    Args:
+        text: Plain text message (mutually exclusive with photo).
+        caption: Photo caption.
+        image_path: Path to optimized image on disk.
+
+    Returns:
+        Formatted message string, or None if nothing to send.
+    """
+    if image_path:
+        prefix = f"[image:{image_path}]"
+        if caption:
+            return f"{prefix} {caption}"
+        return prefix
+
+    return text
+
+
 async def run_telegram_bot(settings: TelegramSettings) -> None:
     """Main polling loop for the Telegram bot.
 
@@ -103,35 +171,53 @@ async def run_telegram_bot(settings: TelegramSettings) -> None:
             for update in updates:
                 offset = update.update_id + 1
 
-                if update.message is None or update.message.text is None:
+                if update.message is None:
                     continue
 
-                sender_chat_id = str(update.message.chat.id)
+                msg = update.message
+                has_text = msg.text is not None
+                has_photo = msg.photo is not None and len(msg.photo) > 0
+                if not has_text and not has_photo:
+                    continue
 
-                if sender_chat_id != settings.chat_id:
+                sender_chat_id = str(msg.chat.id)
+                sender_name = settings.resolve_sender(sender_chat_id)
+
+                if sender_name is None:
                     logger.warning(
                         "telegram_unauthorized",
                         chat_id=sender_chat_id,
                     )
                     continue
 
-                text = update.message.text
-                logger.info("telegram_message_received", length=len(text))
-
-                append_message(settings.history_path, "dinesh", text)
-
-                typing_task = asyncio.create_task(
-                    _typing_loop(client, settings.chat_id)
+                logger.info(
+                    "telegram_message_received",
+                    sender=sender_name,
+                    has_text=has_text,
+                    has_photo=has_photo,
                 )
 
+                image_path: Path | None = None
+                if has_photo:
+                    image_path = await _download_and_optimize(client, msg, sender_name)
+
+                history_text = msg.text or msg.caption or "(sent an image)"
+                append_message(settings.history_path, sender_name, history_text)
+
+                wake_message = _build_wake_message(msg.text, msg.caption, image_path)
+                if not wake_message:
+                    continue
+
+                typing_task = asyncio.create_task(_typing_loop(client, sender_chat_id))
+
                 try:
-                    response = await _run_wake_session(text)
+                    response = await _run_wake_session(wake_message, sender_name)
                     append_message(settings.history_path, "claudie", response)
-                    await client.send_message(settings.chat_id, response)
+                    await client.send_message(sender_chat_id, response)
                 except Exception as exc:
                     error_msg = f"Session failed: {exc}"
                     logger.error("telegram_session_failed", error=str(exc))
-                    await client.send_message(settings.chat_id, error_msg)
+                    await client.send_message(sender_chat_id, error_msg)
                 finally:
                     typing_task.cancel()
                     with contextlib.suppress(asyncio.CancelledError):
@@ -144,11 +230,12 @@ async def run_telegram_bot(settings: TelegramSettings) -> None:
         logger.info("telegram_bot_stopped")
 
 
-async def _run_wake_session(message: str) -> str:
+async def _run_wake_session(message: str, sender: str) -> str:
     """Spawn wake.sh for a telegram session and extract the response.
 
     Args:
-        message: The user's Telegram message.
+        message: The user's Telegram message (may contain [image:] prefix).
+        sender: Name of the sender (e.g. "dinesh", "carolina").
 
     Returns:
         The response text from the conversation file.
@@ -156,7 +243,7 @@ async def _run_wake_session(message: str) -> str:
     Raises:
         RuntimeError: If wake.sh exits with a non-zero code.
     """
-    cmd = [str(WAKE_SCRIPT), "telegram", message]
+    cmd = [str(WAKE_SCRIPT), "telegram", message, sender]
 
     process = await asyncio.create_subprocess_exec(
         *cmd,
@@ -167,7 +254,7 @@ async def _run_wake_session(message: str) -> str:
     exit_code = await process.wait()
 
     if exit_code != 0:
-        msg = f"wake.sh exited with code {exit_code}"
-        raise RuntimeError(msg)
+        err_msg = f"wake.sh exited with code {exit_code}"
+        raise RuntimeError(err_msg)
 
     return _extract_response(CONVERSATIONS_DIR)
