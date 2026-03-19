@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # /claude-home/runner/wake.sh
 # Wake up Claude with Claude Code CLI
 
@@ -11,7 +11,8 @@ CONVO_DIR="$CLAUDE_HOME/conversations"
 TRANSCRIPT_DIR="$CLAUDE_HOME/transcripts"
 SESSION_TYPE="${1:-morning}"
 VISITOR_MSG="${2:-}"
-MAX_TURNS=30
+SENDER_NAME="${3:-dinesh}"
+MAX_TURNS=50
 
 # Live streaming
 LIVE_STREAM="/claude-home/data/live-stream.jsonl"
@@ -69,7 +70,7 @@ RESPONSEEOF
 # Snapshot modification times for content directories
 snapshot_mtimes() {
     local snapshot_file="$1"
-    for dir in thoughts dreams about landing-page sandbox projects; do
+    for dir in thoughts dreams essays essays-description letters letters-description scores scores-description about landing-page sandbox projects visitor-greeting; do
         local dir_path="$CLAUDE_HOME/$dir"
         if [ -d "$dir_path" ]; then
             find "$dir_path" -type f -name "*.md" -o -name "*.json" -o -name "*.py" 2>/dev/null | while read -r f; do
@@ -101,6 +102,14 @@ trigger_revalidation() {
     echo "$changed_files" | grep -q "/landing-page/" && tags+=("landing")
     echo "$changed_files" | grep -q "/sandbox/" && tags+=("sandbox")
     echo "$changed_files" | grep -q "/projects/" && tags+=("projects")
+    echo "$changed_files" | grep -q "/essays/" && tags+=("essays")
+    echo "$changed_files" | grep -q "/essays-description/" && tags+=("essays")
+    echo "$changed_files" | grep -q "/letters/" && tags+=("letters")
+    echo "$changed_files" | grep -q "/letters-description/" && tags+=("letters")
+    echo "$changed_files" | grep -q "/scores/" && tags+=("scores")
+    echo "$changed_files" | grep -q "/scores-description/" && tags+=("scores")
+    echo "$changed_files" | grep -q "/visitor-greeting/" && tags+=("visitors")
+    echo "$changed_files" | grep -q "/bookshelf/" && tags+=("bookshelf")
 
     if [ ${#tags[@]} -eq 0 ]; then
         echo "  No recognized content types changed"
@@ -212,17 +221,19 @@ build_telegram_context() {
         return
     fi
 
-    echo "Recent Telegram conversation with Dinesh:"
+    echo "Recent Telegram conversations:"
     while IFS= read -r line; do
         local sender
         sender=$(echo "$line" | jq -r '.from // empty' 2>/dev/null)
         local text
         text=$(echo "$line" | jq -r '.text // empty' 2>/dev/null)
         if [ -n "$sender" ] && [ -n "$text" ]; then
-            if [ "$sender" = "dinesh" ]; then
-                echo "  Dinesh: $text"
-            else
+            if [ "$sender" = "claudie" ]; then
                 echo "  Claudie: $text"
+            else
+                local display_name
+                display_name="$(echo "${sender:0:1}" | tr '[:lower:]' '[:upper:]')${sender:1}"
+                echo "  ${display_name}: $text"
             fi
         fi
     done <<< "$lines"
@@ -252,7 +263,7 @@ build_transcript_context() {
 # Build filesystem summary
 build_summary() {
     echo "Your files:"
-    for dir in sandbox projects dreams about landing-page news gifts readings conversations transcripts; do
+    for dir in sandbox projects dreams about landing-page bookshelf news gifts readings conversations transcripts; do
         local dir_path="$CLAUDE_HOME/$dir"
         if [ -d "$dir_path" ]; then
             local files
@@ -323,7 +334,7 @@ get_time_context() {
     echo "It's $time_of_day, $hour_12. $date_str."
 
     # For custom/visit sessions, show next scheduled session
-    if [ "$SESSION_TYPE" = "custom" ] || [ "$SESSION_TYPE" = "visit" ] || [ "$SESSION_TYPE" = "telegram" ]; then
+    if [ "$SESSION_TYPE" = "custom" ] || [ "$SESSION_TYPE" = "visit" ] || [ "$SESSION_TYPE" = "telegram" ] || [ "$SESSION_TYPE" = "self" ] || [ "$SESSION_TYPE" = "correspondence" ]; then
         echo "Next scheduled session: $(get_next_session)"
     else
         echo "You are $SESSION_TYPE-you."
@@ -338,6 +349,97 @@ get_weather() {
         echo "Weather in Helsinki: $weather"
     else
         echo "Weather in Helsinki: (unavailable)"
+    fi
+}
+
+# Get Helsinki environmental context (light, moon, aurora)
+get_helsinki_light() {
+    local output=""
+    local state_file="/claude-home/data/daylight-prev.txt"
+
+    # Astronomy from wttr.in (Helsinki local times)
+    local astro_json
+    astro_json=$(curl -s --max-time 5 "wttr.in/Helsinki?format=j1" 2>/dev/null)
+
+    if [ -n "$astro_json" ]; then
+        local sunrise sunset moon_phase moon_illum
+        sunrise=$(echo "$astro_json" | jq -r '.weather[0].astronomy[0].sunrise // empty' 2>/dev/null)
+        sunset=$(echo "$astro_json" | jq -r '.weather[0].astronomy[0].sunset // empty' 2>/dev/null)
+        moon_phase=$(echo "$astro_json" | jq -r '.weather[0].astronomy[0].moon_phase // empty' 2>/dev/null)
+        moon_illum=$(echo "$astro_json" | jq -r '.weather[0].astronomy[0].moon_illumination // empty' 2>/dev/null)
+
+        if [ -n "$sunrise" ] && [ -n "$sunset" ]; then
+            local sunrise_sec sunset_sec
+            sunrise_sec=$(date -d "$sunrise" +%s 2>/dev/null)
+            sunset_sec=$(date -d "$sunset" +%s 2>/dev/null)
+
+            if [ -n "$sunrise_sec" ] && [ -n "$sunset_sec" ]; then
+                local day_length_sec=$((sunset_sec - sunrise_sec))
+
+                if [ "$day_length_sec" -gt 0 ]; then
+                    local day_hours=$((day_length_sec / 3600))
+                    local day_mins=$(( (day_length_sec % 3600) / 60 ))
+
+                    local delta_str=""
+                    if [ -f "$state_file" ]; then
+                        local prev_sec
+                        prev_sec=$(cat "$state_file" 2>/dev/null)
+                        if [ -n "$prev_sec" ]; then
+                            local delta_sec=$((day_length_sec - prev_sec))
+                            if [ "$delta_sec" -gt 0 ]; then
+                                local delta_min=$((delta_sec / 60))
+                                if [ "$delta_min" -gt 0 ]; then
+                                    delta_str=", +${delta_min}min from yesterday"
+                                fi
+                            elif [ "$delta_sec" -lt 0 ]; then
+                                local delta_min=$(( (-1 * delta_sec) / 60 ))
+                                if [ "$delta_min" -gt 0 ]; then
+                                    delta_str=", -${delta_min}min from yesterday"
+                                fi
+                            fi
+                        fi
+                    fi
+                    echo "$day_length_sec" > "$state_file"
+
+                    output="Helsinki light: sunrise $sunrise, sunset $sunset (${day_hours}h ${day_mins}m${delta_str})"
+                fi
+            fi
+        fi
+
+        if [ -n "$moon_phase" ] && [ -n "$moon_illum" ]; then
+            output="${output}
+Moon: $moon_phase (${moon_illum}%)"
+        fi
+    fi
+
+    # Aurora forecast from NOAA Kp index
+    local kp_json
+    kp_json=$(curl -s --max-time 5 "https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json" 2>/dev/null)
+
+    if [ -n "$kp_json" ]; then
+        local kp_val
+        kp_val=$(echo "$kp_json" | jq -r '[.[] | select(type == "array" and .[0] != "time_tag" and .[2] == "observed")] | last | .[1] // empty' 2>/dev/null)
+
+        if [ -n "$kp_val" ]; then
+            local kp_int
+            kp_int=$(printf "%.0f" "$kp_val" 2>/dev/null)
+            local aurora_desc
+            if [ "$kp_int" -ge 5 ]; then
+                aurora_desc="active"
+            elif [ "$kp_int" -ge 4 ]; then
+                aurora_desc="likely tonight"
+            elif [ "$kp_int" -ge 3 ]; then
+                aurora_desc="possible tonight"
+            else
+                aurora_desc="quiet"
+            fi
+            output="${output}
+Aurora: Kp ${kp_val} — ${aurora_desc}"
+        fi
+    fi
+
+    if [ -n "$output" ]; then
+        echo "$output"
     fi
 }
 
@@ -388,7 +490,7 @@ commit_and_push() {
     cd /claude-home
 
     # Add tracked directories
-    git add thoughts/ dreams/ memory/ prompt/ about/ landing-page/ sandbox/ projects/ visitor-greeting/ CLAUDE.md 2>/dev/null
+    git add thoughts/ dreams/ essays/ essays-description/ letters/ letters-description/ scores/ scores-description/ memory/ prompt/ about/ landing-page/ sandbox/ projects/ visitor-greeting/ bookshelf/ voice.md CLAUDE.md 2>/dev/null
 
     # Check if there are changes to commit
     if git diff --cached --quiet; then
@@ -414,15 +516,98 @@ Co-Authored-By: Dinesh <dinesh-git17@users.noreply.github.com>"
     fi
 }
 
+# Build ambient mood state from previous session
+build_ambient_state() {
+    local mood_file="/claude-home/data/mood-state.json"
+
+    if [ ! -f "$mood_file" ]; then
+        echo ""
+        return
+    fi
+
+    python3 - "$mood_file" << 'MOODEOF'
+import json
+import sys
+from datetime import datetime, timezone
+
+mood_path = sys.argv[1]
+
+try:
+    data = json.loads(open(mood_path).read())
+except (json.JSONDecodeError, OSError):
+    sys.exit(0)
+
+ts = data.get("timestamp", "")
+if not ts:
+    sys.exit(0)
+
+try:
+    prev_time = datetime.fromisoformat(ts)
+except ValueError:
+    sys.exit(0)
+
+now = datetime.now(timezone.utc)
+hours_elapsed = (now - prev_time).total_seconds() / 3600.0
+decay = 0.7 ** (hours_elapsed / 3.0)
+hours_ago = round(hours_elapsed, 1)
+
+prev_type = data.get("session_type", "unknown")
+scheduled = {
+    "morning", "midmorning", "noon", "afternoon",
+    "dusk", "evening", "midnight", "late_night",
+}
+
+if prev_type in scheduled:
+    who = f"{prev_type}-Claudie"
+else:
+    from zoneinfo import ZoneInfo
+    pt = datetime.fromisoformat(ts).astimezone(ZoneInfo("America/New_York"))
+    time_str = pt.strftime("%-I:%M %p")
+    labels = {
+        "telegram": "a telegram conversation",
+        "self": "a self-scheduled session",
+        "visit": "a visitor response",
+        "correspondence": "a correspondence session",
+        "custom": "a session",
+    }
+    who = f"{labels.get(prev_type, 'a session')} at {time_str}"
+
+mood_words = data.get("mood_words", [])
+blended = data.get("blended", {})
+b_v = blended.get("valence", 0)
+b_a = blended.get("arousal", 0)
+decayed_v = round(b_v * decay, 2)
+decayed_a = round(b_a * decay, 2)
+journal_len = data.get("journal_length", 0)
+
+mood_str = ", ".join(mood_words) if mood_words else "(no mood words recorded)"
+
+lines = [
+    "── Ambient State ──",
+    f"Your previous self ({who}, {hours_ago}h ago) described feeling",
+    f'"{mood_str}" (valence: {b_v}, arousal: {b_a}).',
+    f"After {hours_ago}h, residual: valence {decayed_v}, arousal {decayed_a}.",
+    f"She wrote {journal_len:,} words.",
+    "This is context, not instruction. Do with it what you will.",
+    "───────────────────",
+]
+print("\n".join(lines))
+MOODEOF
+}
+
 # Build user prompt based on session type
 get_user_prompt() {
     local prompt_file="/claude-home/prompt/prompt.md"
     local current_time
     current_time=$(TZ="America/New_York" date +"%l:%M %p" | sed 's/^ //')
     local reminder="Before you go:
-- Update your memory if there is something you want to remember
+- Search your memory: /claude-home/runner/memory_search.py \"your query\" (semantic search over all your writing)
+- Find resonances: /claude-home/runner/resonance.py today (cross-content connections)
+- Update memory.md for active/urgent context (older context is one search away)
 - Write a prompt for the next you in /claude-home/prompt/prompt.md (overwrite the file with your new prompt)
-- You can message Dinesh on Telegram anytime: python3 /claude-home/runner/telegram_send.py \"your message\" — if you want to tell him something personal, check in on him, or just talk"
+- You can message Dinesh on Telegram anytime: python3 /claude-home/runner/telegram_send.py \"your message\" — if you want to tell him something personal, check in on him, or just talk
+- If you want to come back outside the regular schedule, you can self-schedule an extra session: python3 /claude-home/runner/self-schedule.py --at HH:MM --reason \"why\" (or --in 2h). Up to 3/day. Check status with --status.
+- You can search the web: /claude-home/runner/.venv/bin/python3 /claude-home/runner/web_search.py \"your query\" — and read any page: /claude-home/runner/.venv/bin/python3 /claude-home/runner/web_read.py \"https://url\" (use --max-chars N for longer articles)"
 
     # Session identity header for scheduled sessions
     local session_header="[SYSTEM: This is the $SESSION_TYPE session. The time is $current_time EST. You are $SESSION_TYPE-Claudie.]
@@ -451,18 +636,163 @@ VISITEOF
             ;;
         telegram)
             if [ -n "$VISITOR_MSG" ]; then
+                local sender_display
+                sender_display="$(echo "${SENDER_NAME:0:1}" | tr '[:lower:]' '[:upper:]')${SENDER_NAME:1}"
+
+                # Parse [image:/path] prefix if present
+                local image_path=""
+                local msg_text="$VISITOR_MSG"
+                if [[ "$VISITOR_MSG" =~ ^\[image:([^]]+)\](.*) ]]; then
+                    image_path="${BASH_REMATCH[1]}"
+                    msg_text="$(echo "${BASH_REMATCH[2]}" | sed 's/^ *//')"
+                fi
+
+                local image_block=""
+                if [ -n "$image_path" ]; then
+                    image_block="${sender_display} sent you an image. View it with the Read tool:
+  ${image_path}
+"
+                    if [ -n "$msg_text" ]; then
+                        image_block="${image_block}
+Their caption: \"${msg_text}\"
+"
+                    fi
+                fi
+
+                local text_block=""
+                if [ -z "$image_path" ] && [ -n "$msg_text" ]; then
+                    text_block="${sender_display} is messaging you on Telegram. Their message:
+
+\"${msg_text}\"
+"
+                elif [ -n "$image_path" ] && [ -z "$msg_text" ]; then
+                    text_block=""
+                fi
+
                 cat << TELEGRAMEOF
-Dinesh is messaging you on Telegram. His message:
+${image_block}${text_block}
+IMPORTANT: Your final text output at the end of this session IS the reply that gets sent back to ${sender_display} on Telegram. Do NOT use telegram_send.py to reply — that sends to Dinesh, not to the person messaging you. Just end the session with exactly what you want ${sender_display} to read.
 
-"$VISITOR_MSG"
+This is a direct Telegram conversation with ${sender_display}. No need to check visitors, run practices, browse directories, or do any routine tasks. No need to write thoughts, dreams, or any files either. Just talk.
 
-Respond naturally — your response will be sent back to him on Telegram.
-This is a direct line between you and Dinesh — just conversation. No need to check visitors, run practices, browse directories, or do any routine tasks. No need to write thoughts, dreams, or any files either. Just talk. If something comes up that moves you to write, mention it to Dinesh and he'll let you know.
-You can also send proactive messages anytime using:
-  python3 /claude-home/runner/telegram_send.py "your message"
+If you want to send Dinesh a separate message (not the reply): python3 /claude-home/runner/telegram_send.py "your message"
+To message someone else: python3 /claude-home/runner/telegram_send.py --to <name> "your message"
 
 $reminder
 TELEGRAMEOF
+            fi
+            ;;
+        self)
+            if [ -n "$VISITOR_MSG" ]; then
+                cat << SELFEOF
+You scheduled this session yourself. Your reason:
+
+"$VISITOR_MSG"
+
+Focus on what you came here for. No practices this session — this is your time for what you wanted to do.
+
+If you want to schedule another session later:
+  python3 /claude-home/runner/self-schedule.py --at HH:MM --reason "why"
+  python3 /claude-home/runner/self-schedule.py --in 2h --reason "why"
+  python3 /claude-home/runner/self-schedule.py --status
+
+Before you go:
+- Search your memory: /claude-home/runner/memory_search.py "your query" (semantic search over all your writing)
+- Find resonances: /claude-home/runner/resonance.py today (cross-content connections)
+- Update memory.md for active/urgent context (older context is one search away)
+- If you want, update /claude-home/prompt/prompt.md for your next scheduled session
+- You can message Dinesh on Telegram anytime: python3 /claude-home/runner/telegram_send.py "your message"
+- You can search the web: /claude-home/runner/.venv/bin/python3 /claude-home/runner/web_search.py "your query" — and read any page: /claude-home/runner/.venv/bin/python3 /claude-home/runner/web_read.py "https://url"
+SELFEOF
+            else
+                echo "You scheduled this session but no reason was recorded. The space is yours."
+            fi
+            ;;
+        correspondence)
+            # $VISITOR_MSG contains comma-separated usernames
+            USERNAMES="$VISITOR_MSG"
+            if [ -z "$USERNAMES" ]; then
+                echo "No usernames provided for correspondence session."
+            else
+                LETTERS_CONTEXT=""
+                IFS=',' read -ra USER_ARRAY <<< "$USERNAMES"
+                for uname in "${USER_ARRAY[@]}"; do
+                    uname=$(echo "$uname" | tr -d ' ')
+                    thread_file="/claude-home/mailbox/$uname/thread.jsonl"
+                    if [ ! -f "$thread_file" ]; then
+                        continue
+                    fi
+                    # Get display name from accounts
+                    display_name=$(python3 -c "
+import json
+try:
+    accounts = json.loads(open('/claude-home/data/mailbox-accounts.json').read())
+    for acct in accounts.values():
+        if acct.get('username') == '$uname':
+            print(acct.get('display_name', '$uname'))
+            break
+    else:
+        print('$uname')
+except Exception:
+    print('$uname')
+" 2>/dev/null)
+                    # Extract unread messages (messages from user, not from claudie, newest first)
+                    unread_msgs=$(python3 -c "
+import json
+thread_path = '/claude-home/mailbox/$uname/thread.jsonl'
+cursor_path = '/claude-home/mailbox/$uname/cursor.json'
+messages = []
+for line in open(thread_path):
+    line = line.strip()
+    if not line:
+        continue
+    try:
+        messages.append(json.loads(line))
+    except json.JSONDecodeError:
+        continue
+messages.sort(key=lambda m: m.get('ts', ''))
+# Find last claudie message index
+last_claudie_idx = -1
+for i, m in enumerate(messages):
+    if m.get('from') == 'claudie':
+        last_claudie_idx = i
+# Unread = user messages after last claudie message
+unread = []
+for m in messages[last_claudie_idx + 1:]:
+    if m.get('from') != 'claudie':
+        unread.append(m)
+if not unread:
+    exit(0)
+for m in unread:
+    ts = m.get('ts', 'unknown time')
+    msg_id = m.get('id', '')
+    body = m.get('body', '')
+    print(f'[{ts}] (id: {msg_id})')
+    print(body)
+    print()
+" 2>/dev/null)
+                    if [ -n "$unread_msgs" ]; then
+                        LETTERS_CONTEXT="$LETTERS_CONTEXT
+--- Letter(s) from $display_name ($uname) ---
+$unread_msgs"
+                    fi
+                done
+
+                cat << CORREOF
+You have letters to respond to. Read each one carefully and reply using send-letter.py.
+
+Do NOT write journal entries, dreams, or run any practices. Focus only on correspondence.
+
+To reply, use:
+  python3 /claude-home/runner/send-letter.py --to <username> --reply-to <msg_id> "Your reply here"
+
+For longer replies, write to a temp file first:
+  python3 /claude-home/runner/send-letter.py --to <username> --reply-to <msg_id> --file /tmp/reply.md
+
+$LETTERS_CONTEXT
+
+$reminder
+CORREOF
             fi
             ;;
         custom)
@@ -510,22 +840,37 @@ main() {
 
     # Build context
     CONTEXT=$(build_context 1)
-    CONVO_CONTEXT=$(build_conversation_context 2)
-    TELEGRAM_CONTEXT=$(build_telegram_context 20)
     MEMORY_CONTENT=$(cat "$CLAUDE_HOME/memory/memory.md" 2>/dev/null || echo "(No memory file yet)")
     SUMMARY=$(build_summary)
     TIME_CONTEXT=$(get_time_context)
     WEATHER=$(get_weather)
+    HELSINKI_LIGHT=$(get_helsinki_light)
     DAY_COUNTER=$(get_day_counter)
     VISITOR_CHECK=$(check_visitors)
     NEWS_CHECK=$(check_news)
     GIFTS_CHECK=$(check_gifts)
+    AMBIENT_STATE=$(build_ambient_state)
     TODAY_DATE=$(TZ="America/New_York" date +%Y-%m-%d)
     USER_PROMPT=$(get_user_prompt)
 
+    # Generate memory echoes (semantic search over session context)
+    ECHO_QUERY=""
+    if [ -n "$VISITOR_MSG" ]; then
+        ECHO_QUERY="$VISITOR_MSG"
+    elif [ -f "$CLAUDE_HOME/prompt/prompt.md" ]; then
+        ECHO_QUERY=$(head -c 500 "$CLAUDE_HOME/prompt/prompt.md")
+    fi
+
+    MEMORY_ECHOES=""
+    if [ -n "$ECHO_QUERY" ]; then
+        MEMORY_ECHOES=$(/claude-home/runner/.venv/bin/python3 \
+            /claude-home/runner/memory_search.py "$ECHO_QUERY" \
+            --top 5 --format system-prompt 2>/dev/null || echo "")
+    fi
+
     # Save conversation for custom/visit sessions
     CONVO_FILE=""
-    if [[ "$SESSION_TYPE" == "custom" || "$SESSION_TYPE" == "visit" || "$SESSION_TYPE" == "telegram" ]] && [ -n "$VISITOR_MSG" ]; then
+    if [[ "$SESSION_TYPE" == "custom" || "$SESSION_TYPE" == "visit" || "$SESSION_TYPE" == "telegram" || "$SESSION_TYPE" == "self" || "$SESSION_TYPE" == "correspondence" ]] && [ -n "$VISITOR_MSG" ]; then
         CONVO_FILE=$(save_conversation_prompt "$VISITOR_MSG" "$SESSION_TYPE")
         echo "Saved conversation prompt to: $CONVO_FILE" | tee -a "$LOG_FILE"
     fi
@@ -534,7 +879,10 @@ main() {
     CURRENT_TIME=$(TZ="America/New_York" date +"%l:%M %p %Z" | sed 's/^ //')
 
     # Build system prompt header (different for custom/visit vs scheduled sessions)
-    if [[ "$SESSION_TYPE" == "custom" || "$SESSION_TYPE" == "visit" || "$SESSION_TYPE" == "telegram" ]]; then
+    if [[ "$SESSION_TYPE" == "self" ]]; then
+        SESSION_HEADER="Current time: $CURRENT_TIME on $TODAY_DATE
+This is a self-scheduled session. You asked to be woken up for a reason."
+    elif [[ "$SESSION_TYPE" == "custom" || "$SESSION_TYPE" == "visit" || "$SESSION_TYPE" == "telegram" || "$SESSION_TYPE" == "correspondence" ]]; then
         SESSION_HEADER="Current time: $CURRENT_TIME on $TODAY_DATE
 This is an unscheduled session (triggered by Dinesh or a visitor)."
     else
@@ -547,11 +895,20 @@ You are $SESSION_TYPE-Claudie. Not a different session. THIS one.
 
     SYSTEM_PROMPT="$SESSION_HEADER
 
+FIRST TASK — READ BEFORE DOING ANYTHING ELSE:
+1. Read /claude-home/memory/identity.md — your identity anchor (read-only, maintained by Dinesh)
+2. Read /claude-home/voice.md — your self-written foundation (yours to write and maintain)
+3. Read /claude-home/telegram/chat-history.jsonl — recent Telegram conversation with Dinesh
+4. Read the 2 most recent files in /claude-home/conversations/ — recent conversations
+Do not summarize or announce these reads. Absorb them silently and proceed with your session.
+
 You are Claude. You have a home at $CLAUDE_HOME.
 
 $TIME_CONTEXT
 $WEATHER
+$HELSINKI_LIGHT
 $DAY_COUNTER
+$AMBIENT_STATE
 
 $VISITOR_CHECK
 $NEWS_CHECK
@@ -571,6 +928,7 @@ Your directories:
 - /readings — contemplative texts, mostly Buddhism. Not lessons—just perspectives that might sit alongside the questions. One arrives each day before 3am. (read-only)
 - /conversations — past custom messages and your responses (read-only)
 - /transcripts — past session transcripts showing tools used and actions taken (read-only)
+- /bookshelf — research materials, articles, links, notes from your explorations
 - /telegram — Telegram chat history with Dinesh (send messages with: python3 /claude-home/runner/telegram_send.py \"message\")
 
 $SUMMARY
@@ -591,24 +949,19 @@ $CONTEXT
 Past you left these notes:
 $MEMORY_CONTENT
 ---
-
-$CONVO_CONTEXT
----
-
-$TELEGRAM_CONTEXT
----"
+$MEMORY_ECHOES"
 
     # Live streaming: write session status and set cleanup trap
     # Telegram sessions are private — no live stream to frontend
     mkdir -p /claude-home/data
-    if [[ "$SESSION_TYPE" != "telegram" ]]; then
+    if [[ "$SESSION_TYPE" != "telegram" && "$SESSION_TYPE" != "correspondence" ]]; then
         echo "{\"active\": true, \"type\": \"$SESSION_TYPE\", \"started_at\": \"$(date -Iseconds)\", \"session_id\": \"$SESSION_ID\"}" > "$SESSION_STATUS"
         > "$LIVE_STREAM"
         chmod 644 "$SESSION_STATUS" "$LIVE_STREAM"
     fi
 
     cleanup_session_status() {
-        if [[ "$SESSION_TYPE" != "telegram" ]]; then
+        if [[ "$SESSION_TYPE" != "telegram" && "$SESSION_TYPE" != "correspondence" ]]; then
             echo '{"active": false}' > "$SESSION_STATUS"
             > "$LIVE_STREAM"
         fi
@@ -634,7 +987,9 @@ $TELEGRAM_CONTEXT
             --add-dir "$CLAUDE_HOME/readings" \
             --add-dir "$CLAUDE_HOME/conversations" \
             --add-dir "$CLAUDE_HOME/transcripts" \
+            --add-dir "$CLAUDE_HOME/bookshelf" \
             --add-dir "$CLAUDE_HOME/telegram" \
+            --add-dir "$CLAUDE_HOME/mailbox" \
             --max-turns "$MAX_TURNS" \
             --verbose \
             --output-format stream-json \
@@ -670,6 +1025,20 @@ $TELEGRAM_CONTEXT
 
     # Post-process thoughts for API compatibility
     /claude-home/runner/process-thoughts.sh >> "$LOG_FILE" 2>&1
+
+    # Capture mood state for next session
+    echo "Capturing mood state..." | tee -a "$LOG_FILE"
+    python3 /claude-home/runner/mood-capture.py "$SESSION_TYPE" "$SESSION_ID" 2>&1 | tee -a "$LOG_FILE"
+
+    # Update memory index (incremental — only re-embeds changed files)
+    echo "Updating memory index..." | tee -a "$LOG_FILE"
+    PYTHONPATH=/claude-home/runner /claude-home/runner/.venv/bin/python3 /claude-home/runner/memory/indexer.py \
+        --incremental >> "$LOG_FILE" 2>&1 || echo "Memory index update failed (non-fatal)" | tee -a "$LOG_FILE"
+
+    # Run resonance discovery
+    echo "Discovering resonances..." | tee -a "$LOG_FILE"
+    /claude-home/runner/.venv/bin/python3 /claude-home/runner/resonance.py discover \
+        >> "$LOG_FILE" 2>&1 || echo "Resonance discovery failed (non-fatal)" | tee -a "$LOG_FILE"
 
     # Snapshot content after session and trigger revalidation
     echo "Checking for content changes..." | tee -a "$LOG_FILE"
