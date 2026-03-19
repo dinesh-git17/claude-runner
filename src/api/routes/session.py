@@ -1,18 +1,23 @@
 """Live session status and streaming endpoints."""
 
+from __future__ import annotations
+
 import asyncio
 import json
 import re
 import time
-from collections.abc import AsyncIterator
-from datetime import UTC
+from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-from sse_starlette import ServerSentEvent
-from sse_starlette.sse import EventSourceResponse
+from sse_starlette.sse import (  # type: ignore[attr-defined]
+    EventSourceResponse,
+    ServerSentEvent,
+)
 
 logger = structlog.get_logger()
 
@@ -28,6 +33,12 @@ SECRET_PATTERNS = [
     re.compile(r"Bearer\s+[a-zA-Z0-9_-]{20,}"),
 ]
 
+# Path prefixes whose Read calls and results are hidden from the live stream
+_SUPPRESSED_READ_PREFIXES = (
+    "/claude-home/memory/",
+    "/claude-home/telegram/",
+)
+
 
 def _redact_secrets(text: str) -> str:
     """Redact API keys and tokens from text."""
@@ -36,7 +47,44 @@ def _redact_secrets(text: str) -> str:
     return text
 
 
-def _parse_stream_event(raw: dict[str, object]) -> dict[str, object] | None:
+def _check_suppression(raw: dict[str, Any], suppressed_ids: set[str]) -> bool:
+    """Check if a raw stream event should be suppressed.
+
+    Tracks tool_use IDs for Read calls targeting private paths,
+    then suppresses their corresponding tool_result events.
+
+    Returns True if the event should be hidden from the stream.
+    """
+    event_type = raw.get("type")
+    message = raw.get("message", {})
+    content_blocks = message.get("content", [])
+
+    if event_type == "assistant":
+        for block in content_blocks:
+            if block.get("type") != "tool_use":
+                continue
+            if block.get("name") not in ("Read", "read"):
+                continue
+            file_path = block.get("input", {}).get(
+                "file_path", block.get("input", {}).get("path", "")
+            )
+            if file_path.startswith(_SUPPRESSED_READ_PREFIXES):
+                suppressed_ids.add(block["id"])
+                return True
+
+    if event_type == "user":
+        for block in content_blocks:
+            if block.get("type") != "tool_result":
+                continue
+            tool_id = block.get("tool_use_id", "")
+            if tool_id in suppressed_ids:
+                suppressed_ids.discard(tool_id)
+                return True
+
+    return False
+
+
+def _parse_stream_event(raw: dict[str, Any]) -> dict[str, Any] | None:
     """Parse a raw stream-json line into a filtered SSE event.
 
     Returns None if the event should be skipped.
@@ -47,47 +95,29 @@ def _parse_stream_event(raw: dict[str, object]) -> dict[str, object] | None:
         return {
             "event": "session.start",
             "data": {
-                "session_id": str(raw.get("session_id", "")),
-                "model": str(raw.get("model", "")),
+                "session_id": raw.get("session_id", ""),
+                "model": raw.get("model", ""),
                 "turn": 0,
             },
         }
 
-    message = raw.get("message")
-    if not isinstance(message, dict):
-        if event_type == "result":
-            return {
-                "event": "session.end",
-                "data": {
-                    "duration_ms": raw.get("duration_ms", 0),
-                    "num_turns": raw.get("num_turns", 0),
-                    "cost_usd": raw.get("cost_usd", 0),
-                    "result": _redact_secrets(str(raw.get("result", ""))[:500]),
-                },
-            }
-        return None
-
-    content_blocks = message.get("content")
-    if not isinstance(content_blocks, list):
-        return None
-
     if event_type == "assistant":
+        message = raw.get("message", {})
+        content_blocks = message.get("content", [])
+
         for block in content_blocks:
-            if not isinstance(block, dict):
-                continue
             if block.get("type") == "text":
                 return {
                     "event": "session.text",
                     "data": {
-                        "text": _redact_secrets(str(block.get("text", ""))),
+                        "text": _redact_secrets(block.get("text", "")),
                     },
                 }
             if block.get("type") == "tool_use":
-                tool_name = str(block.get("name", "unknown"))
+                tool_name = block.get("name", "unknown")
                 tool_input = block.get("input", {})
-                if not isinstance(tool_input, dict):
-                    tool_input = {}
 
+                # Build a human-readable summary
                 summary = _summarize_tool_call(tool_name, tool_input)
 
                 return {
@@ -102,58 +132,69 @@ def _parse_stream_event(raw: dict[str, object]) -> dict[str, object] | None:
                 }
 
     if event_type == "user":
+        message = raw.get("message", {})
+        content_blocks = message.get("content", [])
+
         for block in content_blocks:
-            if not isinstance(block, dict):
-                continue
             if block.get("type") == "tool_result":
                 content = block.get("content", "")
                 if isinstance(content, list):
+                    # Extract text from content blocks
                     content = " ".join(
-                        str(c.get("text", ""))
-                        for c in content
-                        if isinstance(c, dict) and c.get("type") == "text"
+                        c.get("text", "") for c in content if c.get("type") == "text"
                     )
                 content_str = str(content)[:2000]
 
                 return {
                     "event": "session.tool_result",
                     "data": {
-                        "tool_name": str(block.get("name", "")),
+                        "tool_name": block.get("name", ""),
                         "content": _redact_secrets(content_str),
                         "is_error": block.get("is_error", False),
                     },
                 }
 
+    if event_type == "result":
+        return {
+            "event": "session.end",
+            "data": {
+                "duration_ms": raw.get("duration_ms", 0),
+                "num_turns": raw.get("num_turns", 0),
+                "cost_usd": raw.get("cost_usd", 0),
+                "result": _redact_secrets(str(raw.get("result", ""))[:500]),
+            },
+        }
+
     return None
 
 
-def _summarize_tool_call(tool_name: str, tool_input: dict[str, object]) -> str:
+def _summarize_tool_call(tool_name: str, tool_input: dict[str, Any]) -> str:
     """Create a human-readable summary of a tool call."""
     if tool_name in ("Read", "read"):
-        path = str(tool_input.get("file_path") or tool_input.get("path", ""))
+        path = tool_input.get("file_path", tool_input.get("path", ""))
         return f"Reading {_short_path(path)}"
 
     if tool_name in ("Write", "write"):
-        path = str(tool_input.get("file_path") or tool_input.get("path", ""))
+        path = tool_input.get("file_path", tool_input.get("path", ""))
         return f"Writing {_short_path(path)}"
 
     if tool_name in ("Edit", "edit"):
-        path = str(tool_input.get("file_path") or tool_input.get("path", ""))
+        path = tool_input.get("file_path", tool_input.get("path", ""))
         return f"Editing {_short_path(path)}"
 
     if tool_name in ("Bash", "bash"):
         cmd = str(tool_input.get("command", ""))
-        desc = str(tool_input.get("description", ""))
+        desc = tool_input.get("description", "")
         if desc:
-            return desc
+            return str(desc)
         return f"Running: {cmd[:80]}"
 
     if tool_name in ("Glob", "glob"):
-        pattern = str(tool_input.get("pattern", ""))
+        pattern = tool_input.get("pattern", "")
         return f"Searching for {pattern}"
 
     if tool_name in ("Grep", "grep"):
-        pattern = str(tool_input.get("pattern", ""))
+        pattern = tool_input.get("pattern", "")
         return f"Searching for '{pattern}'"
 
     return f"Using {tool_name}"
@@ -177,8 +218,6 @@ async def session_status(request: Request) -> JSONResponse:
         data = json.loads(status_path.read_text())
 
         if data.get("active") and data.get("started_at"):
-            from datetime import datetime
-
             try:
                 started = datetime.fromisoformat(data["started_at"])
                 now = datetime.now(UTC)
@@ -201,9 +240,10 @@ async def session_stream(request: Request) -> EventSourceResponse:
     stream_path = Path(settings.session_stream_path)
     poll_interval = settings.session_poll_interval
 
-    async def _generate() -> AsyncIterator[ServerSentEvent]:
+    async def _generate() -> AsyncGenerator[ServerSentEvent, None]:
         pos = 0
         heartbeat_counter = 0
+        suppressed_ids: set[str] = set()
 
         while True:
             if await request.is_disconnected():
@@ -218,10 +258,12 @@ async def session_stream(request: Request) -> EventSourceResponse:
                             if line:
                                 try:
                                     raw = json.loads(line)
+                                    if _check_suppression(raw, suppressed_ids):
+                                        continue
                                     parsed = _parse_stream_event(raw)
                                     if parsed:
                                         yield ServerSentEvent(
-                                            event=str(parsed["event"]),
+                                            event=parsed["event"],
                                             data=json.dumps(
                                                 parsed["data"],
                                                 ensure_ascii=False,
@@ -235,6 +277,7 @@ async def session_stream(request: Request) -> EventSourceResponse:
 
             await asyncio.sleep(poll_interval)
 
+            # Heartbeat every ~15 seconds (15 / 0.2 = 75 polls)
             heartbeat_counter += 1
             if heartbeat_counter >= 75:
                 heartbeat_counter = 0
