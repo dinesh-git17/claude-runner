@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Send a Telegram message from Claudie to Dinesh.
+"""Send a Telegram message from Claudie.
 
 Standalone CLI using only stdlib so it works with system Python
 (no venv activation needed).
 
 Usage:
     python3 /claude-home/runner/telegram_send.py "your message"
+    python3 /claude-home/runner/telegram_send.py --to carolina "your message"
 """
 
 from __future__ import annotations
@@ -45,6 +46,26 @@ def load_env(env_path: Path) -> dict[str, str]:
         values[key.strip()] = value.strip().strip("'\"")
 
     return values
+
+
+def parse_authorized_users(raw: str) -> dict[str, str]:
+    """Parse authorized users from comma-separated name:chat_id pairs.
+
+    Args:
+        raw: Comma-separated string of name:chat_id entries.
+
+    Returns:
+        Mapping of sender name to chat ID.
+    """
+    users: dict[str, str] = {}
+    for entry in raw.split(","):
+        entry = entry.strip()
+        if ":" not in entry:
+            continue
+        name, _, chat_id = entry.partition(":")
+        if name.strip() and chat_id.strip():
+            users[name.strip()] = chat_id.strip()
+    return users
 
 
 def split_message(text: str) -> list[str]:
@@ -135,18 +156,40 @@ def append_history(text: str) -> None:
 
 def main() -> None:
     """Entry point: parse args, send message, log to history."""
-    if len(sys.argv) < 2:
-        sys.stderr.write("Usage: telegram_send.py <message>\n")
+    args = sys.argv[1:]
+
+    if not args:
+        sys.stderr.write("Usage: telegram_send.py [--to name] <message>\n")
         sys.exit(1)
 
-    message = " ".join(sys.argv[1:])
+    target = "dinesh"
+    if args[0] == "--to" and len(args) >= 3:
+        target = args[1].lower()
+        args = args[2:]
+
+    if not args:
+        sys.stderr.write("No message provided.\n")
+        sys.exit(1)
+
+    message = " ".join(args)
 
     env = load_env(ENV_FILE)
     token = env.get("TELEGRAM_BOT_TOKEN", "")
-    chat_id = env.get("TELEGRAM_CHAT_ID", "")
 
-    if not token or not chat_id:
-        sys.stderr.write("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID not set in .env\n")
+    if not token:
+        sys.stderr.write("TELEGRAM_BOT_TOKEN not set in .env\n")
+        sys.exit(1)
+
+    authorized = parse_authorized_users(env.get("TELEGRAM_AUTHORIZED_USERS_RAW", ""))
+    chat_id = authorized.get(target)
+
+    if not chat_id:
+        chat_id = env.get("TELEGRAM_CHAT_ID", "") if target == "dinesh" else ""
+
+    if not chat_id:
+        sys.stderr.write(
+            f"Unknown recipient: {target}. Known: {', '.join(authorized.keys())}\n"
+        )
         sys.exit(1)
 
     chunks = split_message(message)
