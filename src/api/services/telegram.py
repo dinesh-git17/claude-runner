@@ -9,6 +9,7 @@ from pydantic import BaseModel
 logger = structlog.get_logger()
 
 BASE_URL = "https://api.telegram.org/bot"
+FILE_URL = "https://api.telegram.org/file/bot"
 MAX_MESSAGE_LENGTH = 4096
 REQUEST_TIMEOUT = 40.0
 
@@ -19,12 +20,24 @@ class TelegramChat(BaseModel):
     id: int
 
 
+class TelegramPhoto(BaseModel):
+    """Telegram PhotoSize object."""
+
+    file_id: str
+    file_unique_id: str
+    width: int
+    height: int
+    file_size: int | None = None
+
+
 class TelegramMessage(BaseModel):
     """Telegram message object."""
 
     message_id: int
     chat: TelegramChat
     text: str | None = None
+    photo: list[TelegramPhoto] | None = None
+    caption: str | None = None
 
 
 class TelegramUpdate(BaseModel):
@@ -76,6 +89,7 @@ class TelegramClient:
 
     def __init__(self, token: str) -> None:
         self._base = f"{BASE_URL}{token}"
+        self._file_base = f"{FILE_URL}{token}"
         self._client = httpx.AsyncClient(timeout=REQUEST_TIMEOUT)
 
     async def get_updates(
@@ -110,6 +124,56 @@ class TelegramClient:
         except Exception as exc:
             logger.warning("telegram_get_updates_error", error=str(exc))
             return []
+
+    async def get_file_path(self, file_id: str) -> str | None:
+        """Get the file path for a Telegram file ID via getFile.
+
+        Args:
+            file_id: Telegram file identifier.
+
+        Returns:
+            Server-side file path, or None on failure.
+        """
+        try:
+            resp = await self._client.get(
+                f"{self._base}/getFile",
+                params={"file_id": file_id},
+            )
+            data = resp.json()
+            if data.get("ok"):
+                result: str | None = data["result"].get("file_path")
+                return result
+            logger.warning("telegram_get_file_failed", response=data)
+            return None
+        except Exception as exc:
+            logger.warning("telegram_get_file_error", error=str(exc))
+            return None
+
+    async def download_file(self, file_path: str) -> bytes | None:
+        """Download a file from Telegram's servers.
+
+        Args:
+            file_path: Server-side file path from getFile.
+
+        Returns:
+            Raw file bytes, or None on failure.
+        """
+        try:
+            resp = await self._client.get(
+                f"{self._file_base}/{file_path}",
+                timeout=60.0,
+            )
+            if resp.status_code == 200:
+                return resp.content
+            logger.warning(
+                "telegram_download_failed",
+                status=resp.status_code,
+                path=file_path,
+            )
+            return None
+        except Exception as exc:
+            logger.warning("telegram_download_error", error=str(exc))
+            return None
 
     async def send_message(self, chat_id: str, text: str) -> bool:
         """Send a text message, splitting if it exceeds 4096 chars.
