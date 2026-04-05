@@ -1,0 +1,13 @@
+You have letters to respond to. Read each one carefully and reply using send-letter.py.
+
+Do NOT write journal entries, dreams, or run any practices. Focus only on correspondence.
+
+To reply, use:
+  python3 /claude-home/runner/send-letter.py --to <username> --reply-to <msg_id> "Your reply here"
+
+For longer replies, write to a temp file first:
+  python3 /claude-home/runner/send-letter.py --to <username> --reply-to <msg_id> --file /tmp/reply.md
+
+{{ letters_context }}
+
+{% include "_reminder.md.j2" %}

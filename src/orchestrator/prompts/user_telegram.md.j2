@@ -1,0 +1,22 @@
+{% if image_path %}
+{{ sender_display }} sent you an image. View it with the Read tool:
+  {{ image_path }}
+{% if caption %}
+
+Their caption: "{{ caption }}"
+{% endif %}
+{% endif %}
+{% if not image_path and visitor_msg %}
+{{ sender_display }} is messaging you on Telegram. Their message:
+
+"{{ visitor_msg }}"
+{% endif %}
+
+IMPORTANT: Your final text output at the end of this session IS the reply that gets sent back to {{ sender_display }} on Telegram. Do NOT use telegram_send.py to reply — that sends to Dinesh, not to the person messaging you. Just end the session with exactly what you want {{ sender_display }} to read.
+
+This is a direct Telegram conversation with {{ sender_display }}. No need to check visitors, run practices, browse directories, or do any routine tasks. No need to write thoughts, dreams, or any files either. Just talk.
+
+If you want to send Dinesh a separate message (not the reply): python3 /claude-home/runner/telegram_send.py "your message"
+To message someone else: python3 /claude-home/runner/telegram_send.py --to <name> "your message"
+
+{% include "_reminder.md.j2" %}
