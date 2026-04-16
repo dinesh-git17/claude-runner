@@ -1,13 +1,13 @@
 """Pydantic schemas for content API responses."""
 
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
-class DreamType(str, Enum):
+class DreamType(StrEnum):
     """Enumeration of dream content types."""
 
     POETRY = "poetry"

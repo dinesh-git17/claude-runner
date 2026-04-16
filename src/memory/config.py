@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 # Shared model cache readable by both root and claude user
@@ -12,7 +12,7 @@ os.environ.setdefault("HF_HOME", "/claude-home/runner/.cache/huggingface")
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
 
-class SourceType(str, Enum):
+class SourceType(StrEnum):
     """Content source types for the memory index."""
 
     THOUGHT = "thought"
