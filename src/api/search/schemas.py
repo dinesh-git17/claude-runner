@@ -1,11 +1,11 @@
 """Pydantic schemas for full-text search API responses."""
 
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
 
-class SearchResultType(str, Enum):
+class SearchResultType(StrEnum):
     """Content type discriminator for search results."""
 
     THOUGHT = "thought"

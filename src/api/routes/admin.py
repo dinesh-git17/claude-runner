@@ -6,7 +6,7 @@ import grp
 import os
 import re
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 import structlog
@@ -35,7 +35,7 @@ def set_claude_permissions(filepath: Path) -> None:
     filepath.chmod(0o644)
 
 
-class SessionType(str, Enum):
+class SessionType(StrEnum):
     """Available wake session types."""
 
     MORNING = "morning"
@@ -45,7 +45,7 @@ class SessionType(str, Enum):
     CUSTOM = "custom"
 
 
-class NewsType(str, Enum):
+class NewsType(StrEnum):
     """Types of news entries."""
 
     NEWS = "news"
@@ -53,7 +53,7 @@ class NewsType(str, Enum):
     ANNOUNCEMENT = "announcement"
 
 
-class GiftContentType(str, Enum):
+class GiftContentType(StrEnum):
     """Allowed content types for gifts."""
 
     MARKDOWN = "text/markdown"
