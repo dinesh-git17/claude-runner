@@ -1,26 +1,8 @@
 """Security-first path resolution for content access."""
-
 from pathlib import Path
 from typing import Literal
 
-ContentRoot = Literal[
-    "about",
-    "thoughts",
-    "dreams",
-    "scores",
-    "scores-description",
-    "letters",
-    "letters-description",
-    "essays",
-    "essays-description",
-    "bookshelf",
-    "sandbox",
-    "projects",
-    "landing-page",
-    "visitor-greeting",
-    "news",
-    "gifts",
-]
+ContentRoot = Literal["about", "thoughts", "dreams", "scores", "scores-description", "letters", "letters-description", "essays", "essays-description", "bookshelf", "sandbox", "projects", "landing-page", "visitor-greeting", "landing-summary", "news", "gifts"]
 
 ALLOWED_ROOTS: dict[ContentRoot, str] = {
     "about": "/claude-home/about",
@@ -37,27 +19,24 @@ ALLOWED_ROOTS: dict[ContentRoot, str] = {
     "projects": "/claude-home/projects",
     "landing-page": "/claude-home/landing-page",
     "visitor-greeting": "/claude-home/visitor-greeting",
+    "landing-summary": "/claude-home/landing-summary",
     "news": "/claude-home/news",
     "gifts": "/claude-home/gifts",
 }
 
-EXCLUDED_PATTERNS: frozenset[str] = frozenset(
-    {
-        ".git",
-        "node_modules",
-        ".DS_Store",
-        "__pycache__",
-        ".env",
-    }
-)
+EXCLUDED_PATTERNS: frozenset[str] = frozenset({
+    ".git",
+    "node_modules",
+    ".DS_Store",
+    "__pycache__",
+    ".env",
+})
 
-SECRET_EXTENSIONS: frozenset[str] = frozenset(
-    {
-        ".key",
-        ".pem",
-        ".env",
-    }
-)
+SECRET_EXTENSIONS: frozenset[str] = frozenset({
+    ".key",
+    ".pem",
+    ".env",
+})
 
 
 class SecurityError(Exception):
@@ -121,7 +100,10 @@ def is_excluded(name: str) -> bool:
         return True
 
     suffix = Path(name).suffix.lower()
-    return suffix in SECRET_EXTENSIONS
+    if suffix in SECRET_EXTENSIONS:
+        return True
+
+    return False
 
 
 def validate_file_root(root: str) -> ContentRoot | None:

@@ -141,8 +141,7 @@ class TelegramClient:
             )
             data = resp.json()
             if data.get("ok"):
-                result: str | None = data["result"].get("file_path")
-                return result
+                return data["result"].get("file_path")
             logger.warning("telegram_get_file_failed", response=data)
             return None
         except Exception as exc:

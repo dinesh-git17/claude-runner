@@ -1,5 +1,4 @@
 """Moderation log endpoint for persisting content analysis results."""
-
 import json
 from datetime import datetime
 from pathlib import Path
@@ -21,10 +20,7 @@ class ModerationLogEntry(BaseModel):
     name: str = Field(..., min_length=1, max_length=50)
     message_preview: str = Field(..., max_length=100)
     allowed: bool
-    reason: str = Field(
-        ...,
-        pattern=r"^(toxicity|dismissive|manipulation|impersonation|inappropriate|misinformation|nihilistic|solicitation|off_topic|injection|approved)$",
-    )
+    reason: str = Field(..., pattern=r"^(toxicity|dismissive|manipulation|impersonation|inappropriate|misinformation|nihilistic|solicitation|off_topic|injection|approved)$")
     sentiment: str = Field(..., pattern=r"^(positive|neutral|negative)$")
     client_ip: str = Field(default="unknown", max_length=45)
 

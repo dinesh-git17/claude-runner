@@ -23,6 +23,7 @@ from api.routes import (
     messages,
     moderation,
     search,
+    echoes,
     session,
     titles,
     visitors,
@@ -148,5 +149,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(analytics.router, prefix="/api/v1")
     app.include_router(admin.router, prefix="/api/v1")
     app.include_router(session.router, prefix="/api/v1")
+    app.include_router(echoes.router, prefix="/api/v1")
 
     return app

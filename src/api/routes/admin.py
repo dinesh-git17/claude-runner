@@ -1,13 +1,13 @@
 """Admin endpoints for session management and content uploads."""
-
 import asyncio
 import base64
 import grp
 import os
 import re
 from datetime import datetime
-from enum import StrEnum
+from enum import Enum
 from pathlib import Path
+from typing import Optional
 
 import structlog
 from fastapi import APIRouter, HTTPException, Query
@@ -23,7 +23,6 @@ LOG_DIR = CLAUDE_HOME / "logs"
 NEWS_DIR = CLAUDE_HOME / "news"
 GIFTS_DIR = CLAUDE_HOME / "gifts"
 READINGS_DIR = CLAUDE_HOME / "readings"
-CONVERSATIONS_DIR = CLAUDE_HOME / "conversations"
 
 MAX_GIFT_SIZE = 2 * 1024 * 1024  # 2MB
 
@@ -32,10 +31,10 @@ def set_claude_permissions(filepath: Path) -> None:
     """Set file ownership to root:claude with 644 permissions."""
     claude_gid = grp.getgrnam("claude").gr_gid
     os.chown(filepath, 0, claude_gid)
-    filepath.chmod(0o644)
+    os.chmod(filepath, 0o644)
 
 
-class SessionType(StrEnum):
+class SessionType(str, Enum):
     """Available wake session types."""
 
     MORNING = "morning"
@@ -45,7 +44,7 @@ class SessionType(StrEnum):
     CUSTOM = "custom"
 
 
-class NewsType(StrEnum):
+class NewsType(str, Enum):
     """Types of news entries."""
 
     NEWS = "news"
@@ -53,7 +52,7 @@ class NewsType(StrEnum):
     ANNOUNCEMENT = "announcement"
 
 
-class GiftContentType(StrEnum):
+class GiftContentType(str, Enum):
     """Allowed content types for gifts."""
 
     MARKDOWN = "text/markdown"
@@ -69,7 +68,7 @@ class WakeRequest(BaseModel):
     """Request body for triggering a wake session."""
 
     session_type: SessionType = Field(default=SessionType.CUSTOM)
-    prompt: str | None = Field(default=None, max_length=20000)
+    prompt: Optional[str] = Field(default=None, max_length=20000)
 
 
 class WakeResponse(BaseModel):
@@ -101,8 +100,8 @@ class GiftUploadRequest(BaseModel):
     """Request body for uploading a gift."""
 
     title: str = Field(min_length=1, max_length=200)
-    from_name: str | None = Field(default=None, max_length=100, alias="from")
-    description: str | None = Field(default=None, max_length=2000)
+    from_name: Optional[str] = Field(default=None, max_length=100, alias="from")
+    description: Optional[str] = Field(default=None, max_length=2000)
     filename: str = Field(min_length=1, max_length=200)
     content: str = Field(min_length=1)
     content_type: GiftContentType = Field(alias="contentType")
@@ -128,7 +127,7 @@ class ReadingUploadRequest(BaseModel):
     """Request body for uploading a reading."""
 
     title: str = Field(min_length=1, max_length=200)
-    source: str | None = Field(default=None, max_length=200)
+    source: Optional[str] = Field(default=None, max_length=200)
     content: str = Field(min_length=1, max_length=100000)
 
 
@@ -190,9 +189,7 @@ async def trigger_wake(request: WakeRequest) -> WakeResponse:
         logger.info("wake_session_spawned", session_id=session_id, pid=process.pid)
     except OSError as e:
         logger.error("wake_session_failed", error=str(e))
-        raise HTTPException(
-            status_code=500, detail="Failed to start wake session"
-        ) from e
+        raise HTTPException(status_code=500, detail="Failed to start wake session") from e
 
     return WakeResponse(
         success=True,
@@ -271,11 +268,8 @@ async def upload_gift(request: GiftUploadRequest) -> GiftUploadResponse:
         GiftContentType.JPEG,
         GiftContentType.GIF,
     )
-
-    needs_meta_file = is_binary or request.content_type in (
-        GiftContentType.HTML,
-        GiftContentType.PYTHON,
-    )
+    
+    needs_meta_file = is_binary or request.content_type in (GiftContentType.HTML, GiftContentType.PYTHON)
 
     filepath = GIFTS_DIR / request.filename
     if filepath.exists():
@@ -328,9 +322,7 @@ type: {request.content_type.value}
         meta_path.write_text(meta_content, encoding="utf-8")
         set_claude_permissions(meta_path)
 
-        logger.info(
-            "gift_uploaded", filename=request.filename, type=request.content_type.value
-        )
+        logger.info("gift_uploaded", filename=request.filename, type=request.content_type.value)
     else:
         frontmatter = f"""---
 date: {date_str}
@@ -349,11 +341,7 @@ type: {request.content_type.value}
         try:
             filepath.write_text(full_content, encoding="utf-8")
             set_claude_permissions(filepath)
-            logger.info(
-                "gift_uploaded",
-                filename=request.filename,
-                type=request.content_type.value,
-            )
+            logger.info("gift_uploaded", filename=request.filename, type=request.content_type.value)
         except OSError as e:
             logger.error("gift_upload_failed", error=str(e))
             raise HTTPException(status_code=500, detail="Failed to save gift") from e
@@ -363,7 +351,6 @@ type: {request.content_type.value}
         filename=request.filename,
         path=str(filepath),
     )
-
 
 @router.post("/readings", response_model=ReadingUploadResponse)
 async def upload_reading(request: ReadingUploadRequest) -> ReadingUploadResponse:
@@ -413,6 +400,9 @@ title: {request.title}
         filename=filename,
         path=str(filepath),
     )
+
+
+CONVERSATIONS_DIR = CLAUDE_HOME / "conversations"
 
 
 class ConversationItem(BaseModel):
@@ -519,19 +509,13 @@ async def list_conversations(
 
     try:
         all_files = sorted(
-            [
-                f
-                for f in CONVERSATIONS_DIR.iterdir()
-                if f.suffix == ".md" and f.is_file()
-            ],
+            [f for f in CONVERSATIONS_DIR.iterdir() if f.suffix == ".md" and f.is_file()],
             key=lambda f: f.name,
             reverse=True,
         )
     except OSError as e:
         logger.error("conversations_list_failed", error=str(e))
-        raise HTTPException(
-            status_code=500, detail="Failed to list conversations"
-        ) from e
+        raise HTTPException(status_code=500, detail="Failed to list conversations") from e
 
     total = len(all_files)
     candidates = all_files[: limit * 2]

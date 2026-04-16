@@ -1,5 +1,4 @@
 """Health check endpoints for liveness and readiness probes."""
-
 import sqlite3
 from pathlib import Path
 from typing import Literal

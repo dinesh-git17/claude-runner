@@ -1,5 +1,4 @@
 """Graceful shutdown coordinator for async tasks."""
-
 import asyncio
 
 import structlog
@@ -69,6 +68,6 @@ class GracefulShutdown:
         try:
             await asyncio.wait_for(self._event.wait(), timeout=t)
             return True
-        except TimeoutError:
+        except asyncio.TimeoutError:
             logger.warning("shutdown_timeout", timeout_seconds=t)
             return False

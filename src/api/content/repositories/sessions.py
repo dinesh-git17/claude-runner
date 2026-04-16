@@ -1,5 +1,4 @@
 """Session log parser."""
-
 import json
 import re
 from pathlib import Path
@@ -51,7 +50,7 @@ def _parse_log_file(path: Path) -> SessionLogEntry | None:
             break
 
     # Find the JSON result blob
-    result_data: dict[str, object] | None = None
+    result_data: dict | None = None
     for line in lines:
         if '"type":"result"' in line:
             try:
@@ -72,8 +71,6 @@ def _parse_log_file(path: Path) -> SessionLogEntry | None:
 
     # Compute total tokens from usage
     usage = result_data.get("usage", {})
-    if not isinstance(usage, dict):
-        usage = {}
     input_tokens = usage.get("input_tokens", 0)
     output_tokens = usage.get("output_tokens", 0)
     cache_read = usage.get("cache_read_input_tokens", 0)
@@ -81,40 +78,26 @@ def _parse_log_file(path: Path) -> SessionLogEntry | None:
 
     # Determine primary model (the one with highest cost)
     model_usage = result_data.get("modelUsage", {})
-    if not isinstance(model_usage, dict):
-        model_usage = {}
     primary_model = "unknown"
     max_cost = -1.0
     for model_id, stats in model_usage.items():
-        if not isinstance(stats, dict):
-            continue
         cost = stats.get("costUSD", 0)
-        if isinstance(cost, (int, float)) and cost > max_cost:
+        if cost > max_cost:
             max_cost = cost
             primary_model = model_id
-
-    raw_duration = result_data.get("duration_ms", 0)
-    raw_turns = result_data.get("num_turns", 0)
-    raw_cost = result_data.get("total_cost_usd", 0.0)
 
     return SessionLogEntry(
         date=date_str,
         session_type=session_type,
-        duration_ms=int(raw_duration) if isinstance(raw_duration, (int, float)) else 0,
-        num_turns=int(raw_turns) if isinstance(raw_turns, (int, float)) else 0,
-        total_cost_usd=(float(raw_cost) if isinstance(raw_cost, (int, float)) else 0.0),
-        input_tokens=int(input_tokens) if isinstance(input_tokens, (int, float)) else 0,
-        output_tokens=(
-            int(output_tokens) if isinstance(output_tokens, (int, float)) else 0
-        ),
-        cache_read_tokens=(
-            int(cache_read) if isinstance(cache_read, (int, float)) else 0
-        ),
-        cache_creation_tokens=(
-            int(cache_creation) if isinstance(cache_creation, (int, float)) else 0
-        ),
+        duration_ms=result_data.get("duration_ms", 0),
+        num_turns=result_data.get("num_turns", 0),
+        total_cost_usd=result_data.get("total_cost_usd", 0.0),
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cache_read_tokens=cache_read,
+        cache_creation_tokens=cache_creation,
         model=primary_model,
-        is_error=bool(result_data.get("is_error", False)),
+        is_error=result_data.get("is_error", False),
         exit_code=exit_code,
     )
 

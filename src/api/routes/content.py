@@ -1,5 +1,4 @@
 """Content REST API endpoints."""
-
 import base64
 import mimetypes
 from pathlib import Path
@@ -9,52 +8,55 @@ import structlog
 from fastapi import APIRouter, HTTPException, Query
 
 from api.content.paths import (
+    ALLOWED_ROOTS,
     SecurityError,
     resolve_path,
     validate_file_root,
 )
 from api.content.repositories import (
-    get_about_page,
     get_all_bookshelf,
-    get_all_dreams,
     get_all_essays,
     get_all_letters,
-    get_all_scores,
-    get_all_thoughts,
     get_bookshelf_by_slug,
-    get_dream_by_slug,
     get_essay_by_slug,
     get_essays_description,
-    get_landing_page,
     get_letter_by_slug,
     get_letters_description,
-    get_score_by_slug,
     get_scores_description,
-    get_thought_by_slug,
+    get_all_scores,
+    get_score_by_slug,
     get_visitor_greeting,
+    get_landing_summary,
+    get_about_page,
+    get_all_dreams,
+    get_all_thoughts,
+    get_dream_by_slug,
+    get_landing_page,
+    get_thought_by_slug,
 )
 from api.content.schemas import (
-    AboutPage,
+    EssaysDescription,
+    EssayDetail,
+    EssayListItem,
     BookshelfDetail,
     BookshelfListItem,
+    LettersDescription,
+    LetterDetail,
+    LetterListItem,
+    ScoresDescription,
+    ScoreDetail,
+    ScoreListItem,
+    VisitorGreeting,
+    LandingSummary,
+    AboutPage,
     DirectoryTree,
     DreamDetail,
     DreamListItem,
     ErrorResponse,
-    EssayDetail,
-    EssayListItem,
-    EssaysDescription,
     FileContent,
     LandingPage,
-    LetterDetail,
-    LetterListItem,
-    LettersDescription,
-    ScoreDetail,
-    ScoreListItem,
-    ScoresDescription,
     ThoughtDetail,
     ThoughtListItem,
-    VisitorGreeting,
 )
 from api.content.walker import get_directory_tree
 
@@ -64,36 +66,13 @@ router = APIRouter(prefix="/content", tags=["content"])
 
 MAX_FILE_SIZE = 1024 * 1024  # 1MB
 
-BINARY_EXTENSIONS: frozenset[str] = frozenset(
-    {
-        "png",
-        "jpg",
-        "jpeg",
-        "gif",
-        "webp",
-        "ico",
-        "bmp",
-        "pdf",
-        "zip",
-        "tar",
-        "gz",
-        "rar",
-        "mp3",
-        "mp4",
-        "wav",
-        "ogg",
-        "webm",
-        "woff",
-        "woff2",
-        "ttf",
-        "otf",
-        "eot",
-        "exe",
-        "dll",
-        "so",
-        "dylib",
-    }
-)
+BINARY_EXTENSIONS: frozenset[str] = frozenset({
+    "png", "jpg", "jpeg", "gif", "webp", "ico", "bmp",
+    "pdf", "zip", "tar", "gz", "rar",
+    "mp3", "mp4", "wav", "ogg", "webm",
+    "woff", "woff2", "ttf", "otf", "eot",
+    "exe", "dll", "so", "dylib",
+})
 
 
 def is_binary_file(path: Path) -> bool:
@@ -201,6 +180,7 @@ async def get_dream(slug: str) -> DreamDetail:
     return dream
 
 
+
 @router.get(
     "/scores",
     response_model=list[ScoreListItem],
@@ -247,6 +227,9 @@ async def get_score(slug: str) -> ScoreDetail:
     return score
 
 
+
+
+
 @router.get(
     "/scores-description",
     response_model=ScoresDescription,
@@ -260,7 +243,6 @@ async def get_scores_description_route() -> ScoresDescription:
         ScoresDescription with markdown content.
     """
     return get_scores_description()
-
 
 @router.get(
     "/letters",
@@ -321,6 +303,9 @@ async def get_letters_description_route() -> LettersDescription:
         LettersDescription with markdown content.
     """
     return get_letters_description()
+
+
+
 
 
 @router.get(
@@ -388,10 +373,10 @@ async def get_essays_description_route() -> EssaysDescription:
     "/bookshelf",
     response_model=list[BookshelfListItem],
     summary="List all bookshelf entries",
-    description="Returns all bookshelf entries sorted by date descending.",
+    description="Returns all bookshelf research entries sorted by date descending.",
 )
 async def list_bookshelf() -> list[BookshelfListItem]:
-    """List all bookshelf entries.
+    """List all bookshelf research entries.
 
     Returns:
         List of bookshelf entries with slug, date, title, and optional purpose.
@@ -404,9 +389,9 @@ async def list_bookshelf() -> list[BookshelfListItem]:
     response_model=BookshelfDetail,
     responses={404: {"model": ErrorResponse}},
     summary="Get bookshelf entry by slug",
-    description="Returns a single bookshelf entry with full markdown content.",
+    description="Returns a single bookshelf research entry with full markdown content.",
 )
-async def get_bookshelf(slug: str) -> BookshelfDetail:
+async def get_bookshelf_entry(slug: str) -> BookshelfDetail:
     """Get a single bookshelf entry by slug.
 
     Args:
@@ -416,7 +401,7 @@ async def get_bookshelf(slug: str) -> BookshelfDetail:
         Full bookshelf entry with metadata and content.
 
     Raises:
-        HTTPException: 404 if bookshelf entry not found.
+        HTTPException: 404 if entry not found.
     """
     try:
         entry = get_bookshelf_by_slug(slug)
@@ -428,7 +413,6 @@ async def get_bookshelf(slug: str) -> BookshelfDetail:
         raise HTTPException(status_code=404, detail="Bookshelf entry not found")
 
     return entry
-
 
 @router.get(
     "/about",
@@ -631,3 +615,18 @@ async def get_visitor_greeting_route() -> VisitorGreeting:
         VisitorGreeting with content and last_updated.
     """
     return get_visitor_greeting()
+
+
+@router.get(
+    "/landing-summary",
+    response_model=LandingSummary,
+    summary="Get landing summary",
+    description="Returns the landing page first-impression summary.",
+)
+async def get_landing_summary_route() -> LandingSummary:
+    """Get the landing summary content.
+
+    Returns:
+        LandingSummary with content and last_updated.
+    """
+    return get_landing_summary()

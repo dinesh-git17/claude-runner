@@ -1,16 +1,16 @@
 """Async-friendly filesystem watcher with debouncing."""
-
 import asyncio
+import os
 import threading
-from collections.abc import Callable, Coroutine
+from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any
 
 import structlog
 from watchdog.events import (
     FileCreatedEvent,
     FileDeletedEvent,
     FileModifiedEvent,
+    FileMovedEvent,
     FileSystemEvent,
     FileSystemEventHandler,
 )
@@ -22,6 +22,7 @@ logger = structlog.get_logger()
 
 EVENT_PRIORITY: dict[type[FileSystemEvent], int] = {
     FileCreatedEvent: 3,
+    FileMovedEvent: 3,
     FileDeletedEvent: 2,
     FileModifiedEvent: 1,
 }
@@ -36,7 +37,7 @@ def is_temp_file(path: str) -> bool:
     Returns:
         True if the file is a temporary file.
     """
-    name = Path(path).name
+    name = os.path.basename(path)
     return any(
         name.endswith(pattern) or name.startswith(pattern.lstrip("."))
         for pattern in TEMP_FILE_PATTERNS
@@ -57,6 +58,23 @@ def get_event_priority(event: FileSystemEvent) -> int:
     return EVENT_PRIORITY.get(type(event), 0)
 
 
+def _get_effective_path(event: FileSystemEvent) -> str:
+    """Get the effective file path for an event.
+
+    For move/rename events, returns the destination path since that is
+    the final file location. For all other events, returns src_path.
+
+    Args:
+        event: Filesystem event.
+
+    Returns:
+        Effective file path string.
+    """
+    if isinstance(event, FileMovedEvent):
+        return event.dest_path
+    return event.src_path
+
+
 class DebouncingHandler(FileSystemEventHandler):
     """Watchdog event handler with time-based debouncing.
 
@@ -71,7 +89,7 @@ class DebouncingHandler(FileSystemEventHandler):
     def __init__(
         self,
         loop: asyncio.AbstractEventLoop,
-        callback: Callable[[FileSystemEvent], Coroutine[Any, Any, None]],
+        callback: Callable[[FileSystemEvent], Awaitable[None]],
         debounce_ms: int = 50,
     ) -> None:
         """Initialize debouncing handler.
@@ -116,17 +134,16 @@ class DebouncingHandler(FileSystemEventHandler):
     def on_any_event(self, event: FileSystemEvent) -> None:
         """Handle filesystem event with debouncing.
 
+        For move/rename events (atomic writes), uses the destination path
+        as the debounce key since that is the final file location.
+
         Args:
             event: Raw watchdog filesystem event.
         """
         if event.is_directory:
             return
 
-        src_path = event.src_path
-        if isinstance(src_path, str):
-            path = src_path
-        else:
-            path = bytes(src_path).decode("utf-8", errors="replace")
+        path = _get_effective_path(event)
 
         if is_temp_file(path):
             return
@@ -192,7 +209,7 @@ class FilesystemWatcher:
         self,
         paths: list[str],
         loop: asyncio.AbstractEventLoop,
-        on_event: Callable[[FileSystemEvent], Coroutine[Any, Any, None]],
+        on_event: Callable[[FileSystemEvent], Awaitable[None]],
         debounce_ms: int = 50,
     ) -> None:
         """Initialize filesystem watcher.
@@ -206,7 +223,7 @@ class FilesystemWatcher:
         self._paths = paths
         self._debounce_ms = debounce_ms
         self._handler = DebouncingHandler(loop, on_event, debounce_ms)
-        self._observer: Observer | None = None  # pyright: ignore[reportInvalidTypeForm]
+        self._observer: Observer | None = None
 
     @property
     def paths(self) -> list[str]:
@@ -231,13 +248,12 @@ class FilesystemWatcher:
             if not p.is_dir():
                 raise ValueError(f"Watch path is not a directory: {path}")
 
-        observer = Observer()
+        self._observer = Observer()
         for path in self._paths:
-            observer.schedule(self._handler, path, recursive=True)
+            self._observer.schedule(self._handler, path, recursive=True)
             logger.info("watcher_scheduled", path=path)
 
-        observer.start()
-        self._observer = observer
+        self._observer.start()
         logger.info("watcher_started", paths=self._paths)
 
     def stop(self) -> None:

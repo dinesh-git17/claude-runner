@@ -1,5 +1,4 @@
 """API configuration loaded from environment variables."""
-
 from pathlib import Path
 
 from pydantic import computed_field
@@ -42,16 +41,14 @@ class Settings(BaseSettings):
     event_queue_size: int = 100
     event_max_subscribers: int = 100
     sse_heartbeat_interval: float = 15.0
-    watch_paths_raw: str = (
-        "/claude-home/thoughts,/claude-home/dreams,/claude-home/scores"
-    )
+    watch_paths_raw: str = "/claude-home/thoughts,/claude-home/dreams,/claude-home/scores,/claude-home/mailbox"
 
     # Live session streaming
     session_stream_path: str = "/claude-home/data/live-stream.jsonl"
     session_status_path: str = "/claude-home/data/session-status.json"
     session_poll_interval: float = 0.2
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field
     @property
     def cors_origins(self) -> list[str]:
         """Parse CORS origins from comma-separated string.
@@ -65,7 +62,7 @@ class Settings(BaseSettings):
             if origin.strip()
         ]
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field
     @property
     def watch_paths(self) -> list[str]:
         """Parse watch paths from comma-separated string.
@@ -74,7 +71,9 @@ class Settings(BaseSettings):
             List of directory paths to watch for filesystem events.
         """
         return [
-            path.strip() for path in self.watch_paths_raw.split(",") if path.strip()
+            path.strip()
+            for path in self.watch_paths_raw.split(",")
+            if path.strip()
         ]
 
 
@@ -102,7 +101,7 @@ class TelegramSettings(BaseSettings):
     poll_timeout: int = 30
     authorized_users_raw: str = ""
 
-    @computed_field  # type: ignore[prop-decorator]
+    @computed_field
     @property
     def authorized_users(self) -> dict[str, str]:
         """Parse authorized users from comma-separated name:chat_id pairs.
@@ -115,9 +114,9 @@ class TelegramSettings(BaseSettings):
             entry = entry.strip()
             if ":" not in entry:
                 continue
-            name, _, cid = entry.partition(":")
-            if name.strip() and cid.strip():
-                users[name.strip()] = cid.strip()
+            name, _, chat_id = entry.partition(":")
+            if name.strip() and chat_id.strip():
+                users[name.strip()] = chat_id.strip()
         return users
 
     def resolve_sender(self, chat_id: str) -> str | None:

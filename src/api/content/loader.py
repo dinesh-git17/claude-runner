@@ -1,5 +1,4 @@
 """Frontmatter parsing and content loading utilities."""
-
 import re
 from pathlib import Path
 from typing import Generic, TypeVar

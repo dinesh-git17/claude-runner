@@ -4,7 +4,7 @@ import json
 import os
 import tempfile
 import threading
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TypedDict
 
@@ -39,8 +39,8 @@ def _load_registry() -> RegistryData:
         _save_registry(initial)
         return initial
 
-    with REGISTRY_PATH.open(encoding="utf-8") as f:
-        return json.load(f)  # type: ignore[no-any-return]
+    with open(REGISTRY_PATH, encoding="utf-8") as f:
+        return json.load(f)
 
 
 def _save_registry(data: RegistryData) -> None:
@@ -55,11 +55,10 @@ def _save_registry(data: RegistryData) -> None:
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
-        Path(temp_path).replace(REGISTRY_PATH)
+        os.replace(temp_path, REGISTRY_PATH)
     except Exception:
-        temp = Path(temp_path)
-        if temp.exists():
-            temp.unlink()
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
         raise
 
 
@@ -105,7 +104,7 @@ def store(
     Returns:
         Tuple of (TitleEntry, created) where created is True if new entry.
     """
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.utc)
 
     with _lock:
         registry = _load_registry()

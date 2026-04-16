@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import grp
 import io
 import shutil
 from pathlib import Path
+from typing import Any
 
 import structlog
 from PIL import Image
@@ -13,16 +13,13 @@ from PIL import Image
 logger = structlog.get_logger()
 
 MAILBOX_DIR = Path("/claude-home/mailbox")
-MAX_IMAGE_BYTES = 5 * 1024 * 1024
-CLAUDE_GROUP = "claude"
-
+MAX_IMAGE_BYTES = 5 * 1024 * 1024  # 5 MB
 ALLOWED_FORMATS: dict[str, str] = {
     "JPEG": ".jpg",
     "PNG": ".png",
     "GIF": ".gif",
     "WEBP": ".webp",
 }
-
 MIME_MAP: dict[str, str] = {
     "JPEG": "image/jpeg",
     "PNG": "image/png",
@@ -30,30 +27,9 @@ MIME_MAP: dict[str, str] = {
     "WEBP": "image/webp",
 }
 
-EXT_TO_MIME: dict[str, str] = {
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".png": "image/png",
-    ".gif": "image/gif",
-    ".webp": "image/webp",
-}
-
-
-def _set_claude_group(path: Path) -> None:
-    """Set ownership to root:claude with appropriate permissions."""
-    try:
-        gid = grp.getgrnam(CLAUDE_GROUP).gr_gid
-        shutil.chown(str(path), user="root", group=gid)
-        path.chmod(0o664 if path.is_file() else 0o775)
-    except (KeyError, OSError):
-        pass
-
 
 def validate_image(data: bytes) -> tuple[str, str, str]:
     """Validate image bytes by magic bytes via Pillow.
-
-    Args:
-        data: Raw image bytes to validate.
 
     Returns:
         Tuple of (pillow_format, file_extension, mime_type).
@@ -74,7 +50,7 @@ def validate_image(data: bytes) -> tuple[str, str, str]:
         raise ValueError(msg) from exc
 
     fmt = img.format
-    if fmt is None or fmt not in ALLOWED_FORMATS:
+    if fmt not in ALLOWED_FORMATS:
         msg = f"Unsupported image format: {fmt}. Allowed: JPEG, PNG, GIF, WEBP"
         raise ValueError(msg)
 
@@ -96,7 +72,8 @@ def sanitize_image(data: bytes, fmt: str) -> bytes:
     """
     img = Image.open(io.BytesIO(data))
 
-    save_kwargs: dict[str, object] = {}
+    # Drop ICC profile and other info by not passing it through
+    save_kwargs: dict[str, Any] = {}
     if fmt == "JPEG":
         save_kwargs["quality"] = 95
         save_kwargs["optimize"] = True
@@ -131,23 +108,34 @@ def sanitize_image(data: bytes, fmt: str) -> bytes:
 def store_attachment(username: str, msg_id: str, data: bytes, ext: str) -> str:
     """Save image to the user's attachments directory.
 
-    Args:
-        username: Mailbox account username.
-        msg_id: Message ID for filename derivation.
-        data: Sanitized image bytes.
-        ext: File extension including dot (e.g., ".jpg").
-
     Returns:
-        The stored filename (e.g., msg_20260312_u_001.jpg).
+        The filename (e.g., msg_20260312_u_001.jpg).
     """
     attachments_dir = MAILBOX_DIR / username / "attachments"
     attachments_dir.mkdir(parents=True, exist_ok=True)
-    _set_claude_group(attachments_dir)
+
+    # Set group permissions for claude user access
+    try:
+        import grp
+
+        gid = grp.getgrnam("claude").gr_gid
+        shutil.chown(str(attachments_dir), user="root", group=gid)
+        attachments_dir.chmod(0o775)
+    except (KeyError, OSError):
+        pass
 
     filename = f"{msg_id}{ext}"
     filepath = attachments_dir / filename
     filepath.write_bytes(data)
-    _set_claude_group(filepath)
+
+    try:
+        import grp
+
+        gid = grp.getgrnam("claude").gr_gid
+        shutil.chown(str(filepath), user="root", group=gid)
+        filepath.chmod(0o664)
+    except (KeyError, OSError):
+        pass
 
     logger.info(
         "attachment_stored",
@@ -162,19 +150,13 @@ def store_attachment(username: str, msg_id: str, data: bytes, ext: str) -> str:
 def get_attachment_path(username: str, filename: str) -> Path | None:
     """Resolve and validate an attachment path.
 
-    Prevents path traversal by verifying the resolved path remains
-    within the expected attachments directory.
-
-    Args:
-        username: Mailbox account username.
-        filename: Requested filename.
-
     Returns:
         The path if it exists and is within the expected directory, else None.
     """
     attachments_dir = MAILBOX_DIR / username / "attachments"
     filepath = attachments_dir / filename
 
+    # Prevent path traversal
     try:
         filepath.resolve().relative_to(attachments_dir.resolve())
     except ValueError:
@@ -187,13 +169,13 @@ def get_attachment_path(username: str, filename: str) -> Path | None:
 
 
 def get_mime_type(filename: str) -> str:
-    """Derive MIME type from attachment filename extension.
-
-    Args:
-        filename: Attachment filename.
-
-    Returns:
-        MIME type string, defaulting to application/octet-stream.
-    """
+    """Derive MIME type from attachment filename extension."""
     ext = Path(filename).suffix.lower()
-    return EXT_TO_MIME.get(ext, "application/octet-stream")
+    ext_to_mime = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+    }
+    return ext_to_mime.get(ext, "application/octet-stream")

@@ -1,5 +1,4 @@
 """Analytics aggregation across thoughts, dreams, and session logs."""
-
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 
@@ -12,7 +11,6 @@ from api.content.schemas import (
     DreamTypeCount,
     MoodFrequency,
     MoodTimelineEntry,
-    SessionLogEntry,
     SessionTrend,
     WeeklyOutput,
 )
@@ -79,9 +77,7 @@ def compute_analytics() -> AnalyticsSummary:
     avg_cost = total_cost / total_sessions if total_sessions else 0.0
 
     # --- Daily activity ---
-    daily: dict[str, dict[str, int]] = defaultdict(
-        lambda: {"thoughts": 0, "dreams": 0, "sessions": 0}
-    )
+    daily: dict[str, dict[str, int]] = defaultdict(lambda: {"thoughts": 0, "dreams": 0, "sessions": 0})
     for t in thoughts:
         daily[t.date]["thoughts"] += 1
     for d in dreams:
@@ -111,16 +107,13 @@ def compute_analytics() -> AnalyticsSummary:
 
     # --- Mood timeline (most recent 60 days) ---
     mood_timeline = sorted(
-        [
-            MoodTimelineEntry(date=d, moods=list(dict.fromkeys(moods)))
-            for d, moods in mood_by_date.items()
-        ],
+        [MoodTimelineEntry(date=d, moods=list(dict.fromkeys(moods))) for d, moods in mood_by_date.items()],
         key=lambda x: x.date,
         reverse=True,
     )[:60]
 
     # --- Session trends (by date) ---
-    sessions_by_date: dict[str, list[SessionLogEntry]] = defaultdict(list)
+    sessions_by_date: dict[str, list] = defaultdict(list)
     for s in sessions:
         sessions_by_date[s.date].append(s)
 
@@ -131,10 +124,7 @@ def compute_analytics() -> AnalyticsSummary:
                 avg_duration_ms=sum(s.duration_ms for s in sl) / len(sl),
                 avg_turns=sum(s.num_turns for s in sl) / len(sl),
                 total_tokens=sum(
-                    s.input_tokens
-                    + s.output_tokens
-                    + s.cache_read_tokens
-                    + s.cache_creation_tokens
+                    s.input_tokens + s.output_tokens + s.cache_read_tokens + s.cache_creation_tokens
                     for s in sl
                 ),
                 session_count=len(sl),
@@ -145,9 +135,7 @@ def compute_analytics() -> AnalyticsSummary:
     )
 
     # --- Weekly output ---
-    weekly: dict[str, dict[str, int]] = defaultdict(
-        lambda: {"thoughts": 0, "dreams": 0}
-    )
+    weekly: dict[str, dict[str, int]] = defaultdict(lambda: {"thoughts": 0, "dreams": 0})
     for t in thoughts:
         wk = _iso_week_start(t.date)
         weekly[wk]["thoughts"] += 1
@@ -166,7 +154,8 @@ def compute_analytics() -> AnalyticsSummary:
         type_counter[d.type.value if hasattr(d.type, "value") else str(d.type)] += 1
 
     dream_type_counts = [
-        DreamTypeCount(type=t, count=c) for t, c in type_counter.most_common()
+        DreamTypeCount(type=t, count=c)
+        for t, c in type_counter.most_common()
     ]
 
     return AnalyticsSummary(

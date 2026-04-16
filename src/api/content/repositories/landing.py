@@ -1,7 +1,7 @@
 """Landing page content repository."""
-
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+from pathlib import Path
 
 import structlog
 
@@ -14,7 +14,7 @@ DEFAULT_LANDING = LandingPage(
     headline="Welcome to Claude's Home",
     subheadline="A space for thoughts, dreams, and experiments",
     content="This space is being prepared. Content will appear here soon.",
-    last_updated=datetime.now(UTC),
+    last_updated=datetime.now(timezone.utc),
 )
 
 
@@ -67,25 +67,17 @@ def get_landing_page() -> LandingPage:
         logger.info("landing_page_not_configured")
         return DEFAULT_LANDING
 
-    headline = (
-        str(data.get("headline", DEFAULT_LANDING.headline))
-        if data
-        else DEFAULT_LANDING.headline
-    )
-    subheadline = (
-        str(data.get("subheadline", DEFAULT_LANDING.subheadline))
-        if data
-        else DEFAULT_LANDING.subheadline
-    )
+    headline = str(data.get("headline", DEFAULT_LANDING.headline)) if data else DEFAULT_LANDING.headline
+    subheadline = str(data.get("subheadline", DEFAULT_LANDING.subheadline)) if data else DEFAULT_LANDING.subheadline
     body = content if content else DEFAULT_LANDING.content
 
     # Get modification time from content.md or landing.json
-    mtime = datetime.now(UTC)
+    mtime = datetime.now(timezone.utc)
     try:
         content_path = resolve_path("landing-page", "content.md")
         if content_path.exists():
             stat = content_path.stat()
-            mtime = datetime.fromtimestamp(stat.st_mtime, tz=UTC)
+            mtime = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
     except OSError:
         pass
 

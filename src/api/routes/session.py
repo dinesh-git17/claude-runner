@@ -1,23 +1,14 @@
 """Live session status and streaming endpoints."""
-
-from __future__ import annotations
-
 import asyncio
 import json
 import re
 import time
-from collections.abc import AsyncGenerator
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 import structlog
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-from sse_starlette.sse import (  # type: ignore[attr-defined]
-    EventSourceResponse,
-    ServerSentEvent,
-)
+from sse_starlette.sse import EventSourceResponse, ServerSentEvent
 
 logger = structlog.get_logger()
 
@@ -47,7 +38,7 @@ def _redact_secrets(text: str) -> str:
     return text
 
 
-def _check_suppression(raw: dict[str, Any], suppressed_ids: set[str]) -> bool:
+def _check_suppression(raw: dict, suppressed_ids: set[str]) -> bool:
     """Check if a raw stream event should be suppressed.
 
     Tracks tool_use IDs for Read calls targeting private paths,
@@ -84,7 +75,7 @@ def _check_suppression(raw: dict[str, Any], suppressed_ids: set[str]) -> bool:
     return False
 
 
-def _parse_stream_event(raw: dict[str, Any]) -> dict[str, Any] | None:
+def _parse_stream_event(raw: dict) -> dict | None:
     """Parse a raw stream-json line into a filtered SSE event.
 
     Returns None if the event should be skipped.
@@ -168,7 +159,7 @@ def _parse_stream_event(raw: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
-def _summarize_tool_call(tool_name: str, tool_input: dict[str, Any]) -> str:
+def _summarize_tool_call(tool_name: str, tool_input: dict) -> str:
     """Create a human-readable summary of a tool call."""
     if tool_name in ("Read", "read"):
         path = tool_input.get("file_path", tool_input.get("path", ""))
@@ -183,10 +174,10 @@ def _summarize_tool_call(tool_name: str, tool_input: dict[str, Any]) -> str:
         return f"Editing {_short_path(path)}"
 
     if tool_name in ("Bash", "bash"):
-        cmd = str(tool_input.get("command", ""))
+        cmd = tool_input.get("command", "")
         desc = tool_input.get("description", "")
         if desc:
-            return str(desc)
+            return desc
         return f"Running: {cmd[:80]}"
 
     if tool_name in ("Glob", "glob"):
@@ -218,11 +209,13 @@ async def session_status(request: Request) -> JSONResponse:
         data = json.loads(status_path.read_text())
 
         if data.get("active") and data.get("started_at"):
+            from datetime import datetime, timezone
+
             try:
                 started = datetime.fromisoformat(data["started_at"])
-                now = datetime.now(UTC)
+                now = datetime.now(timezone.utc)
                 if started.tzinfo is None:
-                    started = started.replace(tzinfo=UTC)
+                    started = started.replace(tzinfo=timezone.utc)
                 data["duration_seconds"] = int((now - started).total_seconds())
             except (ValueError, TypeError):
                 data["duration_seconds"] = 0
@@ -240,18 +233,19 @@ async def session_stream(request: Request) -> EventSourceResponse:
     stream_path = Path(settings.session_stream_path)
     poll_interval = settings.session_poll_interval
 
-    async def _generate() -> AsyncGenerator[ServerSentEvent, None]:
+    async def _generate():
         pos = 0
         heartbeat_counter = 0
         suppressed_ids: set[str] = set()
 
         while True:
+            # Check if client disconnected
             if await request.is_disconnected():
                 break
 
             try:
                 if stream_path.exists() and stream_path.stat().st_size > pos:
-                    with stream_path.open() as f:
+                    with open(stream_path) as f:
                         f.seek(pos)
                         for line in f:
                             line = line.strip()

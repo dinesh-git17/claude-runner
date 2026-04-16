@@ -1,13 +1,11 @@
 """SSE broadcast hub for streaming events to clients."""
-
 import asyncio
-import contextlib
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 import structlog
-from sse_starlette import ServerSentEvent
+from sse_starlette.sse import ServerSentEvent
 from watchdog.events import FileSystemEvent
 
 from api.events.bus import EventBus
@@ -115,7 +113,7 @@ class BroadcastHub:
                         event=event.type.value,
                         data=event.model_dump_json(),
                     )
-                except TimeoutError:
+                except asyncio.TimeoutError:
                     heartbeat = DomainEvent(
                         id=str(uuid.uuid4()),
                         type=EventType.HEARTBEAT,
@@ -130,8 +128,10 @@ class BroadcastHub:
             pass
         finally:
             pump_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
+            try:
                 await pump_task
+            except asyncio.CancelledError:
+                pass
 
             async with self._lock:
                 self._active_connections -= 1

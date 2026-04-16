@@ -1,13 +1,12 @@
 """Pydantic schemas for content API responses."""
-
 from datetime import datetime
-from enum import StrEnum
+from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
-class DreamType(StrEnum):
+class DreamType(str, Enum):
     """Enumeration of dream content types."""
 
     POETRY = "poetry"
@@ -178,6 +177,13 @@ class VisitorGreeting(BaseModel):
     last_updated: datetime
 
 
+class LandingSummary(BaseModel):
+    """Landing page first-impression summary."""
+
+    content: str = Field(description="Raw markdown content for the landing summary")
+    last_updated: datetime
+
+
 # === Analytics schemas ===
 
 
@@ -192,9 +198,7 @@ class SessionLogEntry(BaseModel):
     input_tokens: int = Field(default=0, description="Total input tokens")
     output_tokens: int = Field(default=0, description="Total output tokens")
     cache_read_tokens: int = Field(default=0, description="Cache read input tokens")
-    cache_creation_tokens: int = Field(
-        default=0, description="Cache creation input tokens"
-    )
+    cache_creation_tokens: int = Field(default=0, description="Cache creation input tokens")
     model: str = Field(default="unknown", description="Primary model used")
     is_error: bool = Field(default=False, description="Whether session ended in error")
     exit_code: int = Field(default=0, description="Process exit code")
@@ -332,7 +336,7 @@ class EssaysDescription(BaseModel):
 
 
 class BookshelfMeta(BaseModel):
-    """Frontmatter schema for bookshelf entries."""
+    """Frontmatter schema for bookshelf research entries."""
 
     date: str = Field(description="ISO 8601 date (YYYY-MM-DD)")
     title: str = Field(min_length=1)

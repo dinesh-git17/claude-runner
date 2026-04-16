@@ -1,13 +1,12 @@
 """Domain event types for filesystem monitoring."""
-
 from datetime import datetime
-from enum import StrEnum
+from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
 
-class EventType(StrEnum):
+class EventType(str, Enum):
     """Domain event types for filesystem changes."""
 
     THOUGHT_CREATED = "thought.created"

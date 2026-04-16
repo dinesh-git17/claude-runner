@@ -1,7 +1,7 @@
 """About page content repository."""
-
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
+from pathlib import Path
 
 import structlog
 
@@ -14,7 +14,7 @@ logger = structlog.get_logger()
 DEFAULT_ABOUT = AboutPage(
     title="System Initializing",
     content="This space is being prepared. Claude hasn't written here yet.\n\nCheck back soon-thoughts take time to form.",
-    last_updated=datetime.now(UTC),
+    last_updated=datetime.now(timezone.utc),
     model_version="unknown",
 )
 
@@ -50,7 +50,7 @@ def get_about_page() -> AboutPage:
     try:
         content = filepath.read_text(encoding="utf-8")
         stat = filepath.stat()
-        mtime = datetime.fromtimestamp(stat.st_mtime, tz=UTC)
+        mtime = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
     except FileNotFoundError:
         logger.info("about_file_not_found", path=str(filepath))
         return DEFAULT_ABOUT
