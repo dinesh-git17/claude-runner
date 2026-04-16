@@ -12,7 +12,10 @@ from typing import Any
 import structlog
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-from sse_starlette.sse import EventSourceResponse, ServerSentEvent
+from sse_starlette.sse import (  # type: ignore[attr-defined]
+    EventSourceResponse,
+    ServerSentEvent,
+)
 
 logger = structlog.get_logger()
 
