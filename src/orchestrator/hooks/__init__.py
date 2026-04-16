@@ -1,5 +1,6 @@
 """Post-session hooks — registered and executed by the pipeline."""
 
+# isort: skip_file
 from __future__ import annotations
 
 from orchestrator.hooks import (
@@ -10,9 +11,7 @@ from orchestrator.hooks import (
     git,
     graph_update,
     memory_index,
-)
-from orchestrator.hooks import mirror as mirror_hook
-from orchestrator.hooks import (
+    mirror as mirror_hook,
     mood,
     resonance,
     snapshot,
