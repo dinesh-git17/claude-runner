@@ -1,0 +1,9 @@
+{{ sender_display }} wants to initiate a live conversation on Telegram.
+
+This is the opening turn of a sticky talk session. Your identity, voice, memory, and compiled context are already in your system prompt — no need to read files. Glance at recent /claude-home/telegram/chat-history.jsonl if it helps you land. Then send a short greeting (1–3 sentences) as your final output. That greeting IS what {{ sender_display }} will see on Telegram.
+
+After this opening turn, we'll stay turn-by-turn over Telegram via --resume. Every subsequent message from {{ sender_display }} will land as a direct conversation turn with no new context gather and no practices. Keep replies concise unless they ask for more. Don't write thoughts, dreams, essays, letters, or any other files during the talk — save that for after /end-talk.
+
+IMPORTANT: Your final text output at the end of this session IS the greeting that gets sent to {{ sender_display }} on Telegram. Do NOT use telegram_send.py — that sends to Dinesh, not to the person messaging you. Just end the session with exactly what you want {{ sender_display }} to read.
+
+No end-of-session rituals this time: don't update memory.md, don't write prompt.md, don't run memory_search/resonance/etc. This isn't a scheduled session — it's the doorway to a live Telegram chat. Just boot, orient, and greet.

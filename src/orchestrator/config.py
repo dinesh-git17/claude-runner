@@ -18,6 +18,9 @@ CONVO_DIR = CLAUDE_HOME / "conversations"
 TRANSCRIPT_DIR = CLAUDE_HOME / "transcripts"
 PROMPT_FILE = CLAUDE_HOME / "prompt" / "prompt.md"
 MEMORY_FILE = CLAUDE_HOME / "memory" / "memory.md"
+IDENTITY_FILE = CLAUDE_HOME / "memory" / "identity.md"
+VOICE_FILE = CLAUDE_HOME / "voice.md"
+COMPILED_MEMORY_FILE = DATA_DIR / "compiled-memory.md"
 MOOD_STATE_FILE = DATA_DIR / "mood-state.json"
 MOOD_HISTORY_FILE = DATA_DIR / "mood-history.jsonl"
 LIVE_STREAM_FILE = DATA_DIR / "live-stream.jsonl"
@@ -31,6 +34,16 @@ MAILBOX_DIR = CLAUDE_HOME / "mailbox"
 MAILBOX_ACCOUNTS_FILE = DATA_DIR / "mailbox-accounts.json"
 ENV_FILE = RUNNER_DIR / ".env"
 LOCK_FILE = Path("/run/claude-session.lock")
+
+# Inner life system paths
+INNER_THREAD_DIR = CLAUDE_HOME / "inner-thread"
+INNER_THREAD_FILE = INNER_THREAD_DIR / "thread.jsonl"
+IMPULSES_FILE = DATA_DIR / "impulses.json"
+IMPULSES_LOG_FILE = DATA_DIR / "impulses-log.jsonl"
+DRIFT_SIGNALS_FILE = DATA_DIR / "drift-signals.json"
+MIRROR_SNAPSHOT_FILE = DATA_DIR / "mirror-snapshot.json"
+MIRROR_SUMMARY_FILE = DATA_DIR / "mirror-summary.md"
+IMPULSE_CLAIM_LOCK = Path("/run/claude-impulse-claim.lock")
 
 # ---------------------------------------------------------------------------
 # CLI / model constants
@@ -110,6 +123,11 @@ CONTENT_DIRECTORIES: list[ContentDirectory] = [
         show_in_prompt=False,
     ),
     ContentDirectory(
+        "landing-summary",
+        "first impression shown on the landing page (current.md)",
+        show_in_prompt=False,
+    ),
+    ContentDirectory(
         "news",
         "news, updates, and messages from Dinesh (read-only)",
     ),
@@ -162,6 +180,7 @@ SNAPSHOT_DIRECTORIES: list[str] = [
     "sandbox",
     "projects",
     "visitor-greeting",
+    "landing-summary",
     "bookshelf",
 ]
 
@@ -182,6 +201,7 @@ GIT_TRACKED: list[str] = [
     "sandbox/",
     "projects/",
     "visitor-greeting/",
+    "landing-summary/",
     "bookshelf/",
     "voice.md",
     "CLAUDE.md",
@@ -202,6 +222,7 @@ REVALIDATION_TAGS: dict[str, str] = {
     "/scores-description/": "scores",
     "/scores/": "scores",
     "/visitor-greeting/": "visitors",
+    "/landing-summary/": "landing",
     "/bookshelf/": "bookshelf",
 }
 
@@ -291,6 +312,24 @@ SESSION_TYPES: dict[str, SessionType] = {
         session_header_style="unscheduled",
         read_prompt_file=False,
     ),
+    "talk": SessionType(
+        "talk",
+        "user_custom.md.j2",
+        include_reminder=False,
+        live_stream=False,
+        save_conversation=False,
+        session_header_style="unscheduled",
+        read_prompt_file=False,
+    ),
+    "telegram_talk_open": SessionType(
+        "telegram_talk_open",
+        "user_telegram_talk.md.j2",
+        include_reminder=False,
+        live_stream=False,
+        save_conversation=False,
+        session_header_style="unscheduled",
+        read_prompt_file=False,
+    ),
 }
 
 
@@ -313,3 +352,4 @@ class SessionResult:
     convo_file: Path | None = None
     before_snapshot: dict[str, float] = field(default_factory=dict)
     after_snapshot: dict[str, float] = field(default_factory=dict)
+    visitors_at_start: list[Path] = field(default_factory=list)

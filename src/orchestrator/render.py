@@ -41,6 +41,8 @@ class PromptRenderer:
             current_time_tz=ctx.current_time_tz,
             today_date=ctx.today_date,
             claude_home=str(CLAUDE_HOME),
+            identity_content=ctx.identity_content,
+            voice_content=ctx.voice_content,
             time_context=ctx.time_context,
             weather=ctx.weather,
             helsinki_light=ctx.helsinki_light,
@@ -53,7 +55,12 @@ class PromptRenderer:
             file_summary=ctx.file_summary,
             recent_thought=ctx.recent_thought,
             memory_content=ctx.memory_content,
+            compiled_memory=ctx.compiled_memory,
             memory_echoes=ctx.memory_echoes,
+            inner_thread_context=ctx.inner_thread_context,
+            drift_context=ctx.drift_context,
+            impulse_context=ctx.impulse_context,
+            mirror_context=ctx.mirror_context,
         )
 
     def render_user_prompt(

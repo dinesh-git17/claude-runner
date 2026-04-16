@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import tempfile
 from pathlib import Path
 
 import structlog
@@ -21,6 +22,8 @@ from orchestrator.config import (
 )
 
 logger = structlog.get_logger()
+
+STREAM_BUFFER_LIMIT = 4 * 1024 * 1024  # 4 MB per line
 
 
 def _write_session_status(active: bool, **extra: str) -> None:
@@ -39,14 +42,37 @@ def _build_cli_command(
     system_prompt: str,
     user_prompt: str,
     max_turns: int,
-) -> list[str]:
-    """Build the claude CLI command with all flags."""
+    cli_session_id: str | None = None,
+) -> tuple[list[str], list[Path]]:
+    """Build the claude CLI command with all flags.
+
+    Writes system prompt and user prompt to temp files to avoid
+    hitting Linux ARG_MAX / MAX_ARG_STRLEN limits on large prompts.
+
+    Returns:
+        Tuple of (command list, list of temp file paths to clean up).
+    """
     add_dirs: list[str] = []
     for d in CONTENT_DIRECTORIES:
         if d.add_to_cli:
             add_dirs.extend(["--add-dir", str(CLAUDE_HOME / d.name)])
 
-    return [
+    # Write prompts to temp files (readable by claude user)
+    tmp_files: list[Path] = []
+
+    sys_fd, sys_path = tempfile.mkstemp(prefix="claude-sys-", suffix=".txt")
+    os.write(sys_fd, system_prompt.encode("utf-8"))
+    os.close(sys_fd)
+    Path(sys_path).chmod(0o644)
+    tmp_files.append(Path(sys_path))
+
+    usr_fd, usr_path = tempfile.mkstemp(prefix="claude-usr-", suffix=".txt")
+    os.write(usr_fd, user_prompt.encode("utf-8"))
+    os.close(usr_fd)
+    Path(usr_path).chmod(0o644)
+    tmp_files.append(Path(usr_path))
+
+    cmd = [
         "sudo",
         "-u",
         "claude",
@@ -62,10 +88,11 @@ def _build_cli_command(
         "--verbose",
         "--output-format",
         "stream-json",
-        "--system-prompt",
-        system_prompt,
-        user_prompt,
     ]
+    if cli_session_id:
+        cmd.extend(["--session-id", cli_session_id])
+    cmd.extend(["--system-prompt", f"@{sys_path}", f"@{usr_path}"])
+    return cmd, tmp_files
 
 
 async def run_claude_session(
@@ -75,6 +102,7 @@ async def run_claude_session(
     session_id: str,
     log_file: Path,
     max_turns: int,
+    cli_session_id: str | None = None,
 ) -> SessionResult:
     """Invoke Claude Code CLI, stream output, return result."""
     stream_file = Path(f"/tmp/claude-stream-{os.getpid()}.jsonl")
@@ -89,7 +117,9 @@ async def run_claude_session(
         LIVE_STREAM_FILE.write_text("")
         LIVE_STREAM_FILE.chmod(0o644)
 
-    cmd = _build_cli_command(system_prompt, user_prompt, max_turns)
+    cmd, tmp_files = _build_cli_command(
+        system_prompt, user_prompt, max_turns, cli_session_id=cli_session_id
+    )
     logger.info("session_starting_cli", cmd_length=len(cmd))
 
     try:
@@ -98,6 +128,7 @@ async def run_claude_session(
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             cwd=str(CLAUDE_HOME),
+            limit=STREAM_BUFFER_LIMIT,
         )
 
         assert proc.stdout is not None  # guaranteed by PIPE
@@ -119,6 +150,9 @@ async def run_claude_session(
         if session_type.live_stream:
             _write_session_status(active=False)
             LIVE_STREAM_FILE.write_text("")
+        # Clean up prompt temp files
+        for tf in tmp_files:
+            tf.unlink(missing_ok=True)
 
     # Extract result JSON for log file
     if stream_file.exists():
@@ -150,3 +184,23 @@ async def run_claude_session(
         log_file=log_file,
         claude_home=CLAUDE_HOME,
     )
+
+
+def extract_final_text(stream_file: Path) -> tuple[str, str]:
+    """Return (final_assistant_text, claude_session_id) from a stream-json file."""
+    text = ""
+    sid = ""
+    if not stream_file.exists():
+        return text, sid
+    for raw in stream_file.read_text(encoding="utf-8").splitlines():
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            data = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if data.get("type") == "result":
+            text = data.get("result", "") or text
+            sid = data.get("session_id", "") or sid
+    return text, sid

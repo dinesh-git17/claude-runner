@@ -11,6 +11,7 @@ import contextlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -18,19 +19,26 @@ import structlog
 
 from orchestrator.config import (
     CLAUDE_HOME,
+    COMPILED_MEMORY_FILE,
     CONTENT_DIRECTORIES,
     CONVO_DIR,
     DAY_ZERO,
     DAYLIGHT_PREV_FILE,
+    DRIFT_SIGNALS_FILE,
+    IDENTITY_FILE,
+    IMPULSES_FILE,
+    INNER_THREAD_FILE,
     MAILBOX_ACCOUNTS_FILE,
     MAILBOX_DIR,
     MEMORY_FILE,
+    MIRROR_SNAPSHOT_FILE,
     MOOD_STATE_FILE,
     PROMPT_FILE,
     RUNNER_DIR,
     SCHEDULED_SESSION_NAMES,
     SUMMARY_DIRECTORIES,
     TELEGRAM_HISTORY_FILE,
+    VOICE_FILE,
     SessionType,
 )
 
@@ -56,10 +64,13 @@ class SessionContext:
     ambient_state: str
     recent_thought: str
     memory_content: str
+    compiled_memory: str
     file_summary: str
     visitor_check: str
     news_check: str
     gifts_check: str
+    identity_content: str
+    voice_content: str
     memory_echoes: str
     today_date: str
     current_time: str
@@ -67,6 +78,10 @@ class SessionContext:
     session_name: str
     prompt_file_content: str
     directories: list[dict[str, str]]
+    inner_thread_context: str
+    drift_context: str
+    impulse_context: str
+    mirror_context: str
 
 
 # ---------------------------------------------------------------------------
@@ -318,7 +333,7 @@ def build_time_context(session_type: SessionType) -> str:
 
     line1 = f"It's {tod}, {hour_12}. {date_str}."
 
-    unscheduled = {"custom", "visit", "telegram", "self", "correspondence"}
+    unscheduled = {"custom", "visit", "telegram", "self", "correspondence", "talk"}
     if session_type.name in unscheduled:
         line2 = f"Next scheduled session: {_get_next_session(now.hour)}"
     else:
@@ -383,6 +398,34 @@ def read_memory() -> str:
     if MEMORY_FILE.exists():
         return MEMORY_FILE.read_text(encoding="utf-8")
     return "(No memory file yet)"
+
+
+def read_identity() -> str:
+    """Read identity.md contents."""
+    if IDENTITY_FILE.exists():
+        return IDENTITY_FILE.read_text(encoding="utf-8")
+    return ""
+
+
+def read_voice() -> str:
+    """Read voice.md contents."""
+    if VOICE_FILE.exists():
+        return VOICE_FILE.read_text(encoding="utf-8")
+    return ""
+
+
+def read_compiled_memory() -> str:
+    """Read the Haiku-compiled memory context.
+
+    Falls back to empty string if the compiled file does not exist
+    (first run or hook failure). The system prompt template skips
+    the section when the field is empty.
+    """
+    if COMPILED_MEMORY_FILE.exists():
+        content = COMPILED_MEMORY_FILE.read_text(encoding="utf-8")
+        if content.strip():
+            return content
+    return ""
 
 
 def read_prompt_file() -> str:
@@ -635,6 +678,159 @@ def build_directory_listing() -> list[dict[str, str]]:
 
 
 # ---------------------------------------------------------------------------
+# Inner life context
+# ---------------------------------------------------------------------------
+
+
+def build_inner_thread_context() -> str:
+    """Read the 3 most recent inner thread entries for context injection."""
+    if not INNER_THREAD_FILE.exists():
+        return ""
+
+    entries: list[dict[str, Any]] = []
+    for line in INNER_THREAD_FILE.read_text(encoding="utf-8").strip().split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entries.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+
+    if not entries:
+        return ""
+
+    recent = entries[-3:]
+    lines = ["\u2500\u2500 Inner Thread \u2500\u2500"]
+    total_len = 0
+    for e in recent:
+        body = e.get("body", "")
+        if len(body) > 280:
+            body = body[:277] + "..."
+        etype = e.get("type", "")
+        day = e.get("day", "")
+        session = e.get("session", "")
+        line_text = f"Day {day} ({session}, {etype}): {body}"
+        if total_len + len(line_text) > 1000:
+            break
+        lines.append(line_text)
+        total_len += len(line_text)
+    lines.append("\u2500" * 19)
+    return "\n".join(lines)
+
+
+def build_drift_context() -> str:
+    """Read drift signals for context injection."""
+    if not DRIFT_SIGNALS_FILE.exists():
+        return ""
+
+    try:
+        data = json.loads(DRIFT_SIGNALS_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return ""
+
+    if data.get("status") == "insufficient_data":
+        return "Drift: not enough data yet (need 7+ days of writing)."
+
+    parts: list[str] = ["\u2500\u2500 Drift (last 7 days) \u2500\u2500"]
+
+    topics = data.get("topics", {})
+    grav = topics.get("gravitating", [])
+    reced = topics.get("receding", [])
+    if grav or reced:
+        topic_parts: list[str] = []
+        if grav:
+            topic_parts.append(f"toward {', '.join(grav)}")
+        if reced:
+            topic_parts.append(f"away from {', '.join(reced)}")
+        parts.append(f"Topics: {'; '.join(topic_parts)}.")
+
+    vocab = data.get("vocabulary", {})
+    emerging = vocab.get("emerging", [])
+    if emerging:
+        parts.append(f"New language: {', '.join(emerging[:5])}.")
+
+    arc = data.get("emotional_arc", {})
+    summary = arc.get("summary", "")
+    if summary:
+        parts.append(f"Emotional arc: {summary}.")
+
+    parts.append("\u2500" * 19)
+    return "\n".join(parts)
+
+
+def build_impulse_context() -> str:
+    """Read impulses for context injection."""
+    if not IMPULSES_FILE.exists():
+        return ""
+
+    try:
+        impulses = json.loads(IMPULSES_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return ""
+
+    if not isinstance(impulses, list):
+        return ""
+
+    now_str = datetime.now(EST).isoformat()
+    pending = [i for i in impulses if i.get("expires_at", "") > now_str]
+
+    if not pending:
+        return "Impulses: 0 pending."
+
+    urgency_rank = {"high": 3, "medium": 2, "low": 1}
+    pending.sort(
+        key=lambda i: (
+            -urgency_rank.get(i.get("urgency", "low"), 1),
+            i.get("created_at", ""),
+        ),
+    )
+    strongest = pending[0]
+
+    body = strongest.get("body", "")
+    urgency = strongest.get("urgency", "?")
+    age_str = ""
+    try:
+        created_dt = datetime.fromisoformat(strongest["created_at"])
+        days_ago = (datetime.now(EST) - created_dt).days
+        age_str = f", {days_ago}d ago" if days_ago > 0 else ", today"
+    except (ValueError, KeyError):
+        pass
+
+    return f'Impulses: {len(pending)} pending. Strongest: "{body}" ({urgency}{age_str})'
+
+
+def build_mirror_context() -> str:
+    """Read mirror snapshot metadata for context injection."""
+    if not MIRROR_SNAPSHOT_FILE.exists():
+        return ""
+
+    try:
+        data = json.loads(MIRROR_SNAPSHOT_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return ""
+
+    if data.get("status") == "insufficient_data":
+        return ""
+
+    day = data.get("day", "?")
+    computed = data.get("computed_at", "")[:10]
+    if not computed:
+        return ""
+
+    try:
+        from datetime import date as _date
+
+        computed_date = _date.fromisoformat(computed)
+        today = datetime.now(EST).date()
+        age = (today - computed_date).days
+    except ValueError:
+        age = "?"
+
+    return f"Mirror: last snapshot Day {day} ({age}d ago). Run `python3 /claude-home/runner/mirror.py reflect` to see it."
+
+
+# ---------------------------------------------------------------------------
 # Orchestrator: gather all context
 # ---------------------------------------------------------------------------
 
@@ -661,7 +857,10 @@ async def gather_all_context(
         day_counter=compute_day_counter(),
         ambient_state=build_ambient_state(),
         recent_thought=read_recent_thoughts(count=1),
+        identity_content=read_identity(),
+        voice_content=read_voice(),
         memory_content=read_memory(),
+        compiled_memory=read_compiled_memory(),
         file_summary=build_file_summary(),
         visitor_check=check_visitors(),
         news_check=check_news(),
@@ -673,4 +872,8 @@ async def gather_all_context(
         session_name=session_type.name,
         prompt_file_content=read_prompt_file(),
         directories=build_directory_listing(),
+        inner_thread_context=build_inner_thread_context(),
+        drift_context=build_drift_context(),
+        impulse_context=build_impulse_context(),
+        mirror_context=build_mirror_context(),
     )
