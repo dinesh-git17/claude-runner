@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 810 140" role="img" aria-label="Claude-Runner">
+  <title>Claude-Runner</title>
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="50%" stop-color="#a78bfa"/>
+      <stop offset="100%" stop-color="#f472b6"/>
+    </linearGradient>
+  </defs>
+  <rect width="810" height="140" rx="10" fill="#0d1117"/>
+  <g fill="url(#grad)" font-family="'SFMono-Regular',Consolas,'Liberation Mono',Menlo,monospace" font-size="12">
+    <text xml:space="preserve" x="20" y="30"> ██████╗██╗      █████╗ ██╗   ██╗██████╗ ███████╗    ██████╗ ██╗   ██╗███╗   ██╗███╗   ██╗███████╗██████╗</text>
+    <text xml:space="preserve" x="20" y="48">██╔════╝██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝    ██╔══██╗██║   ██║████╗  ██║████╗  ██║██╔════╝██╔══██╗</text>
+    <text xml:space="preserve" x="20" y="66">██║     ██║     ███████║██║   ██║██║  ██║█████╗█████╗██████╔╝██║   ██║██╔██╗ ██║██╔██╗ ██║█████╗  ██████╔╝</text>
+    <text xml:space="preserve" x="20" y="84">██║     ██║     ██╔══██║██║   ██║██║  ██║██╔══╝╚════╝██╔══██╗██║   ██║██║╚██╗██║██║╚██╗██║██╔══╝  ██╔══██╗</text>
+    <text xml:space="preserve" x="20" y="102">╚██████╗███████╗██║  ██║╚██████╔╝██████╔╝███████╗    ██║  ██║╚██████╔╝██║ ╚████║██║ ╚████║███████╗██║  ██║</text>
+    <text xml:space="preserve" x="20" y="120"> ╚═════╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝    ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝</text>
+  </g>
+</svg>
