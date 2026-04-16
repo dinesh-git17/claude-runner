@@ -77,3 +77,6 @@ credentials.json
 
 # Reference files
 *.vps
+
+# Superpowers docs (local planning artifacts)
+docs/superpowers/

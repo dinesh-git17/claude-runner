@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     event_max_subscribers: int = 100
     sse_heartbeat_interval: float = 15.0
     watch_paths_raw: str = (
-        "/claude-home/thoughts,/claude-home/dreams,/claude-home/scores"
+        "/claude-home/thoughts,/claude-home/dreams,/claude-home/scores,/claude-home/mailbox"
     )
 
     # Live session streaming
@@ -115,9 +115,9 @@ class TelegramSettings(BaseSettings):
             entry = entry.strip()
             if ":" not in entry:
                 continue
-            name, _, cid = entry.partition(":")
-            if name.strip() and cid.strip():
-                users[name.strip()] = cid.strip()
+            name, _, chat_id = entry.partition(":")
+            if name.strip() and chat_id.strip():
+                users[name.strip()] = chat_id.strip()
         return users
 
     def resolve_sender(self, chat_id: str) -> str | None:

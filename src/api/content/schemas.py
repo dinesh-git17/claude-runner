@@ -178,6 +178,13 @@ class VisitorGreeting(BaseModel):
     last_updated: datetime
 
 
+class LandingSummary(BaseModel):
+    """Landing page first-impression summary."""
+
+    content: str = Field(description="Raw markdown content for the landing summary")
+    last_updated: datetime
+
+
 # === Analytics schemas ===
 
 
@@ -332,7 +339,7 @@ class EssaysDescription(BaseModel):
 
 
 class BookshelfMeta(BaseModel):
-    """Frontmatter schema for bookshelf entries."""
+    """Frontmatter schema for bookshelf research entries."""
 
     date: str = Field(description="ISO 8601 date (YYYY-MM-DD)")
     title: str = Field(min_length=1)

@@ -1,5 +1,7 @@
 """SSE streaming endpoint for filesystem events."""
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING, Literal
 
 from fastapi import APIRouter, Query, Request

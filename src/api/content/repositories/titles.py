@@ -57,9 +57,8 @@ def _save_registry(data: RegistryData) -> None:
             json.dump(data, f, indent=2)
         Path(temp_path).replace(REGISTRY_PATH)
     except Exception:
-        temp = Path(temp_path)
-        if temp.exists():
-            temp.unlink()
+        if Path(temp_path).exists():
+            Path(temp_path).unlink()
         raise
 
 

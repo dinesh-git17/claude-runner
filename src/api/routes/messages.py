@@ -49,7 +49,7 @@ def load_rate_limits() -> dict[str, list[str]]:
         if isinstance(value, str):
             migrated[key] = [value]
         elif isinstance(value, list):
-            migrated[key] = [str(v) for v in value]
+            migrated[key] = value
         else:
             migrated[key] = []
     return migrated
@@ -111,7 +111,7 @@ def record_usage(token: str) -> None:
     timestamps = limits.get(token, [])
     now = datetime.now()
     cutoff = now - timedelta(hours=24)
-    pruned: list[str] = []
+    pruned = []
     for ts in timestamps:
         try:
             if datetime.fromisoformat(ts) >= cutoff:
@@ -163,11 +163,11 @@ def _route_to_mailbox(token: str, name: str, message: str) -> str | None:
     if acct is None:
         return None
 
-    username = str(acct["username"])
+    username = acct["username"]
     msg_id = generate_message_id(username, "u")
-    now = datetime.now(tz=UTC).isoformat()
+    now = datetime.now(UTC).isoformat()
 
-    message_obj: dict[str, object] = {
+    message_obj = {
         "id": msg_id,
         "from": username,
         "ts": now,
@@ -205,8 +205,7 @@ async def send_message(
 
     if token not in trusted_keys:
         logger.warning(
-            "invalid_api_key_attempt",
-            token_prefix=token[:8] if token else "",
+            "invalid_api_key_attempt", token_prefix=token[:8] if token else ""
         )
         raise HTTPException(status_code=401, detail="Invalid API key")
 
@@ -306,7 +305,7 @@ async def send_message_with_image(
             detail="Image sending requires a registered mailbox account",
         )
 
-    username = str(acct["username"])
+    username = acct["username"]
 
     is_allowed, reason = check_rate_limit(token)
     if not is_allowed:
@@ -331,14 +330,14 @@ async def send_message_with_image(
 
     image_data = await image.read()
     try:
-        _fmt, ext, mime = validate_image(image_data)
+        fmt, ext, mime = validate_image(image_data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     msg_id = generate_message_id(username, "u")
     attachment_filename = store_attachment(username, msg_id, image_data, ext)
 
-    now = datetime.now(tz=UTC).isoformat()
+    now = datetime.now(UTC).isoformat()
     message_obj: dict[str, object] = {
         "id": msg_id,
         "from": username,
@@ -359,7 +358,7 @@ async def send_message_with_image(
         message_id=msg_id,
         word_count=word_count,
         image_size=len(image_data),
-        image_format=_fmt,
+        image_format=fmt,
     )
 
     return MessageResponse(

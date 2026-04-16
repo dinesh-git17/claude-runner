@@ -10,6 +10,7 @@ import shutil
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import bcrypt
 import structlog
@@ -32,8 +33,6 @@ router = APIRouter(prefix="/mailbox", tags=["mailbox"])
 
 MAILBOX_DIR = Path("/claude-home/mailbox")
 ACCOUNTS_FILE = Path("/claude-home/data/mailbox-accounts.json")
-RATE_LIMIT_FILE = Path("/claude-home/data/api-rate-limits.json")
-
 BCRYPT_COST = 12
 SESSION_TTL_DAYS = 7
 SESSION_TTL_SECONDS = SESSION_TTL_DAYS * 86400
@@ -41,15 +40,6 @@ MAX_WORDS = 1500
 COOLDOWN_MINUTES = 15
 DAILY_MESSAGE_CAP = 10
 CLAUDE_GROUP = "claude"
-
-USERNAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,18}[a-z0-9]$")
-LOGIN_MAX_FAILURES = 5
-LOGIN_WINDOW_SECONDS = 900
-
-_login_failures: dict[str, list[float]] = {}
-
-
-# --- Filesystem helpers ---
 
 
 def _set_claude_group(path: Path) -> None:
@@ -62,28 +52,29 @@ def _set_claude_group(path: Path) -> None:
         pass
 
 
+RATE_LIMIT_FILE = Path("/claude-home/data/api-rate-limits.json")
+USERNAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,18}[a-z0-9]$")
+LOGIN_MAX_FAILURES = 5
+LOGIN_WINDOW_SECONDS = 900
+
+_login_failures: dict[str, list[float]] = {}
+
+
 # --- Account storage ---
 
 
-AccountData = dict[str, str | dict[str, dict[str, str]]]
-AccountStore = dict[str, AccountData]
-
-
-def load_accounts() -> AccountStore:
+def load_accounts() -> dict[str, Any]:
     """Load mailbox accounts from disk."""
     if not ACCOUNTS_FILE.exists():
         return {}
     try:
-        raw: object = json.loads(ACCOUNTS_FILE.read_text())
-        if isinstance(raw, dict):
-            return raw
-        return {}
+        return json.loads(ACCOUNTS_FILE.read_text())  # type: ignore[no-any-return]
     except (json.JSONDecodeError, OSError):
         logger.error("mailbox_accounts_load_failed")
         return {}
 
 
-def save_accounts(accounts: AccountStore) -> None:
+def save_accounts(accounts: dict[str, Any]) -> None:
     """Atomically write accounts to disk."""
     ACCOUNTS_FILE.parent.mkdir(parents=True, exist_ok=True)
     tmp = ACCOUNTS_FILE.with_suffix(".tmp")
@@ -98,8 +89,8 @@ def get_trusted_keys() -> set[str]:
 
 
 def find_account_by_username(
-    accounts: AccountStore, username: str
-) -> tuple[str, AccountData] | None:
+    accounts: dict[str, Any], username: str
+) -> tuple[str, dict[str, Any]] | None:
     """Find account by username, returning (api_key, account_data)."""
     for api_key, acct in accounts.items():
         if acct.get("username") == username:
@@ -108,37 +99,35 @@ def find_account_by_username(
 
 
 def find_account_by_session(
-    accounts: AccountStore, token: str
-) -> tuple[str, AccountData] | None:
+    accounts: dict[str, Any], token: str
+) -> tuple[str, dict[str, Any]] | None:
     """Find account by session token, returning (api_key, account_data)."""
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     now = datetime.now(UTC).isoformat()
     for api_key, acct in accounts.items():
         sessions = acct.get("sessions", {})
-        if isinstance(sessions, dict):
-            sess = sessions.get(token_hash)
-            if isinstance(sess, dict) and sess.get("expires", "") > now:
-                return api_key, acct
+        sess = sessions.get(token_hash)
+        if sess and sess.get("expires", "") > now:
+            return api_key, acct
     return None
+
+
+def find_account_by_api_key(
+    accounts: dict[str, Any], api_key: str
+) -> dict[str, Any] | None:
+    """Find account by API key."""
+    return accounts.get(api_key)
 
 
 # --- Session auth helper ---
 
 
 def require_session(
-    accounts: AccountStore, authorization: str
-) -> tuple[str, AccountData]:
+    accounts: dict[str, Any], authorization: str
+) -> tuple[str, dict[str, Any]]:
     """Validate session token from Authorization header.
 
-    Args:
-        accounts: Loaded account store.
-        authorization: Raw Authorization header value.
-
-    Returns:
-        Tuple of (api_key, account_data).
-
-    Raises:
-        HTTPException: If the session token is invalid or expired.
+    Returns (api_key, account_data) or raises 401.
     """
     token = authorization.removeprefix("Bearer ").strip()
     if not token.startswith("ses_"):
@@ -153,14 +142,7 @@ def require_session(
 
 
 def check_login_rate_limit(ip: str) -> None:
-    """Check and enforce login rate limit per IP.
-
-    Args:
-        ip: Client IP address.
-
-    Raises:
-        HTTPException: If rate limit is exceeded.
-    """
+    """Check and enforce login rate limit per IP."""
     now = time.monotonic()
     attempts = _login_failures.get(ip, [])
     cutoff = now - LOGIN_WINDOW_SECONDS
@@ -185,30 +167,18 @@ def record_login_failure(ip: str) -> None:
 # --- JSONL helpers ---
 
 
-MessageDict = dict[str, object]
-
-
-def read_thread(username: str) -> list[MessageDict]:
-    """Read all messages from a user's thread, skipping corrupt lines.
-
-    Args:
-        username: Mailbox account username.
-
-    Returns:
-        List of parsed message dictionaries.
-    """
+def read_thread(username: str) -> list[dict[str, Any]]:
+    """Read all messages from a user's thread, skipping corrupt lines."""
     thread_path = MAILBOX_DIR / username / "thread.jsonl"
     if not thread_path.exists():
         return []
-    messages: list[MessageDict] = []
+    messages: list[dict[str, Any]] = []
     for line_num, line in enumerate(thread_path.read_text().splitlines(), start=1):
         stripped = line.strip()
         if not stripped:
             continue
         try:
-            parsed: object = json.loads(stripped)
-            if isinstance(parsed, dict):
-                messages.append(parsed)
+            messages.append(json.loads(stripped))
         except json.JSONDecodeError:
             logger.warning(
                 "mailbox_jsonl_corrupt_line",
@@ -218,13 +188,8 @@ def read_thread(username: str) -> list[MessageDict]:
     return messages
 
 
-def append_to_thread(username: str, message: MessageDict) -> None:
-    """Append a message to a user's thread.jsonl.
-
-    Args:
-        username: Mailbox account username.
-        message: Message dictionary to append.
-    """
+def append_to_thread(username: str, message: dict[str, Any]) -> None:
+    """Append a message to a user's thread.jsonl."""
     thread_dir = MAILBOX_DIR / username
     thread_dir.mkdir(parents=True, exist_ok=True)
     _set_claude_group(thread_dir)
@@ -236,34 +201,19 @@ def append_to_thread(username: str, message: MessageDict) -> None:
 
 
 def read_cursor(username: str) -> str | None:
-    """Read the user's read cursor.
-
-    Args:
-        username: Mailbox account username.
-
-    Returns:
-        Last read message ID, or None if no cursor exists.
-    """
+    """Read the user's read cursor."""
     cursor_path = MAILBOX_DIR / username / "cursor.json"
     if not cursor_path.exists():
         return None
     try:
-        data: object = json.loads(cursor_path.read_text())
-        if isinstance(data, dict):
-            val = data.get("last_read_id")
-            return str(val) if val is not None else None
-        return None
+        data = json.loads(cursor_path.read_text())
+        return data.get("last_read_id")  # type: ignore[no-any-return]
     except (json.JSONDecodeError, OSError):
         return None
 
 
 def write_cursor(username: str, last_read_id: str) -> None:
-    """Atomically write the user's read cursor.
-
-    Args:
-        username: Mailbox account username.
-        last_read_id: Message ID to set as cursor.
-    """
+    """Atomically write the user's read cursor."""
     cursor_dir = MAILBOX_DIR / username
     cursor_dir.mkdir(parents=True, exist_ok=True)
     cursor_path = cursor_dir / "cursor.json"
@@ -279,63 +229,30 @@ def generate_message_id(username: str, prefix: str) -> str:
     Args:
         username: The mailbox owner.
         prefix: 'u' for user messages, 'c' for claudie messages.
-
-    Returns:
-        Message ID in format msg_YYYYMMDD_<prefix>_NNN.
     """
     today = datetime.now(UTC).strftime("%Y%m%d")
     id_prefix = f"msg_{today}_{prefix}_"
     messages = read_thread(username)
-    count = sum(
-        1
-        for m in messages
-        if isinstance(m.get("id"), str) and str(m["id"]).startswith(id_prefix)
-    )
+    count = sum(1 for m in messages if m.get("id", "").startswith(id_prefix))
     return f"{id_prefix}{count + 1:03d}"
 
 
-def _msg_ts(msg: MessageDict) -> str:
-    """Extract timestamp string from a message dict."""
-    ts = msg.get("ts", "")
-    return str(ts) if ts is not None else ""
-
-
-def _msg_id(msg: MessageDict) -> str:
-    """Extract ID string from a message dict."""
-    mid = msg.get("id", "")
-    return str(mid) if mid is not None else ""
-
-
-def _msg_from(msg: MessageDict) -> str:
-    """Extract sender string from a message dict."""
-    sender = msg.get("from", "")
-    return str(sender) if sender is not None else ""
-
-
-def compute_unread(messages: list[MessageDict], cursor_id: str | None) -> int:
-    """Count unread claudie messages after the cursor.
-
-    Args:
-        messages: All thread messages.
-        cursor_id: Current read cursor message ID.
-
-    Returns:
-        Number of unread messages from claudie.
-    """
+def compute_unread(messages: list[dict[str, Any]], cursor_id: str | None) -> int:
+    """Count unread claudie messages after the cursor."""
     if cursor_id is None:
-        return sum(1 for m in messages if _msg_from(m) == "claudie")
+        return sum(1 for m in messages if m.get("from") == "claudie")
     past_cursor = False
     unread = 0
-    for msg in sorted(messages, key=_msg_ts):
-        if _msg_id(msg) == cursor_id:
+    for msg in sorted(messages, key=lambda m: m.get("ts", "")):
+        if msg.get("id") == cursor_id:
             past_cursor = True
             continue
-        if past_cursor and _msg_from(msg) == "claudie":
+        if past_cursor and msg.get("from") == "claudie":
             unread += 1
     return unread
 
 
-# --- Rate limiting ---
+# --- Rate limiting (shared with messages.py) ---
 
 
 def load_rate_limits() -> dict[str, list[str]]:
@@ -343,17 +260,15 @@ def load_rate_limits() -> dict[str, list[str]]:
     if not RATE_LIMIT_FILE.exists():
         return {}
     try:
-        raw: object = json.loads(RATE_LIMIT_FILE.read_text())
+        data = json.loads(RATE_LIMIT_FILE.read_text())
     except (json.JSONDecodeError, OSError):
         return {}
-    if not isinstance(raw, dict):
-        return {}
     migrated: dict[str, list[str]] = {}
-    for key, value in raw.items():
+    for key, value in data.items():
         if isinstance(value, str):
             migrated[key] = [value]
         elif isinstance(value, list):
-            migrated[key] = [str(v) for v in value]
+            migrated[key] = value
         else:
             migrated[key] = []
     return migrated
@@ -365,23 +280,8 @@ def save_rate_limits(limits: dict[str, list[str]]) -> None:
     RATE_LIMIT_FILE.write_text(json.dumps(limits, indent=2))
 
 
-def _safe_parse_iso(ts: str) -> datetime | None:
-    """Parse ISO timestamp, returning None on failure."""
-    try:
-        return datetime.fromisoformat(ts)
-    except ValueError:
-        return None
-
-
 def check_message_rate_limit(api_key: str) -> tuple[bool, str | None]:
-    """Check cooldown and daily cap for a message sender.
-
-    Args:
-        api_key: Sender's API key.
-
-    Returns:
-        Tuple of (allowed, reason). reason is None when allowed.
-    """
+    """Check cooldown and daily cap for a message sender."""
     limits = load_rate_limits()
     timestamps = limits.get(api_key, [])
     if not timestamps:
@@ -398,11 +298,12 @@ def check_message_rate_limit(api_key: str) -> tuple[bool, str | None]:
         minutes = remaining // 60
         seconds = remaining % 60
         return False, f"Cooldown active. Try again in {minutes}m {seconds}s"
-    today_count = 0
-    for ts in timestamps:
-        parsed_ts = _safe_parse_iso(ts)
-        if parsed_ts is not None and parsed_ts >= today_start:
-            today_count += 1
+    today_count = sum(
+        1
+        for ts in timestamps
+        for parsed in [_safe_parse_iso(ts)]
+        if parsed is not None and parsed >= today_start
+    )
     if today_count >= DAILY_MESSAGE_CAP:
         return (
             False,
@@ -412,11 +313,7 @@ def check_message_rate_limit(api_key: str) -> tuple[bool, str | None]:
 
 
 def record_message_usage(api_key: str) -> None:
-    """Record a message send timestamp.
-
-    Args:
-        api_key: Sender's API key.
-    """
+    """Record a message send timestamp."""
     limits = load_rate_limits()
     timestamps = limits.get(api_key, [])
     now = datetime.now()
@@ -424,11 +321,19 @@ def record_message_usage(api_key: str) -> None:
     pruned = [
         ts
         for ts in timestamps
-        if (parsed := _safe_parse_iso(ts)) is not None and parsed >= cutoff
+        if _safe_parse_iso(ts) is not None and _safe_parse_iso(ts) >= cutoff  # type: ignore[operator]
     ]
     pruned.append(now.isoformat())
     limits[api_key] = pruned
     save_rate_limits(limits)
+
+
+def _safe_parse_iso(ts: str) -> datetime | None:
+    """Parse ISO timestamp, returning None on failure."""
+    try:
+        return datetime.fromisoformat(ts)
+    except ValueError:
+        return None
 
 
 # --- Request/Response models ---
@@ -493,7 +398,7 @@ class StatusResponse(BaseModel):
 class ThreadResponse(BaseModel):
     """Thread listing response."""
 
-    messages: list[MessageDict]
+    messages: list[dict[str, Any]]
     has_more: bool
 
 
@@ -606,7 +511,7 @@ async def reset_password(
     if acct is None:
         raise HTTPException(status_code=404, detail="Not registered for mailbox")
 
-    username = str(acct.get("username", ""))
+    username = acct["username"]
     password_raw = f"mb_{username}_{secrets.token_hex(16)}"
     password_hash = bcrypt.hashpw(
         password_raw.encode()[:72], bcrypt.gensalt(rounds=BCRYPT_COST)
@@ -630,14 +535,12 @@ async def login(body: LoginRequest, request: Request) -> LoginResponse:
     accounts = load_accounts()
 
     matched_key: str | None = None
-    matched_acct: AccountData | None = None
+    matched_acct: dict[str, Any] | None = None
 
     for api_key, acct in accounts.items():
         stored_hash = acct.get("web_password_hash", "")
-        if (
-            isinstance(stored_hash, str)
-            and stored_hash
-            and bcrypt.checkpw(body.password.encode()[:72], stored_hash.encode())
+        if stored_hash and bcrypt.checkpw(
+            body.password.encode()[:72], stored_hash.encode()
         ):
             matched_key = api_key
             matched_acct = acct
@@ -658,22 +561,14 @@ async def login(body: LoginRequest, request: Request) -> LoginResponse:
 
     now_iso = datetime.now(UTC).isoformat()
     sessions = matched_acct.get("sessions", {})
-    if isinstance(sessions, dict):
-        matched_acct["sessions"] = {
-            k: v
-            for k, v in sessions.items()
-            if isinstance(v, dict) and v.get("expires", "") > now_iso
-        }
-    else:
-        matched_acct["sessions"] = {}
-
-    sessions_dict = matched_acct["sessions"]
-    if isinstance(sessions_dict, dict):
-        sessions_dict[token_hash] = {"expires": expires.isoformat()}
+    matched_acct["sessions"] = {
+        k: v for k, v in sessions.items() if v.get("expires", "") > now_iso
+    }
+    matched_acct["sessions"][token_hash] = {"expires": expires.isoformat()}
     save_accounts(accounts)
 
-    username = str(matched_acct.get("username", ""))
-    display_name = str(matched_acct.get("display_name", username))
+    username = matched_acct["username"]
+    display_name = matched_acct.get("display_name", username)
 
     logger.info("mailbox_login", username=username)
 
@@ -693,16 +588,16 @@ async def status(
     accounts = load_accounts()
     _, acct = require_session(accounts, authorization)
 
-    username = str(acct.get("username", ""))
-    display_name = str(acct.get("display_name", username))
+    username = acct["username"]
+    display_name = acct.get("display_name", username)
     messages = read_thread(username)
     cursor_id = read_cursor(username)
     unread = compute_unread(messages, cursor_id)
 
     last_msg_ts: str | None = None
     if messages:
-        sorted_msgs = sorted(messages, key=_msg_ts)
-        last_msg_ts = _msg_ts(sorted_msgs[-1]) or None
+        sorted_msgs = sorted(messages, key=lambda m: m.get("ts", ""))
+        last_msg_ts = sorted_msgs[-1].get("ts")
 
     return StatusResponse(
         username=username,
@@ -711,14 +606,6 @@ async def status(
         display_name=display_name,
         last_message=last_msg_ts,
     )
-
-
-def _get_cursor_ts(sorted_msgs: list[MessageDict], cursor_id: str) -> str:
-    """Get the timestamp of the cursor message."""
-    for msg in sorted_msgs:
-        if _msg_id(msg) == cursor_id:
-            return _msg_ts(msg)
-    return ""
 
 
 @router.get("/thread", response_model=ThreadResponse)
@@ -731,15 +618,15 @@ async def thread(
     accounts = load_accounts()
     _, acct = require_session(accounts, authorization)
 
-    username = str(acct.get("username", ""))
+    username = acct["username"]
     all_messages = read_thread(username)
-    sorted_msgs = sorted(all_messages, key=_msg_ts)
+    sorted_msgs = sorted(all_messages, key=lambda m: m.get("ts", ""))
 
     cursor_id = read_cursor(username)
 
     if before is not None:
         cut_idx = next(
-            (i for i, m in enumerate(sorted_msgs) if _msg_id(m) == before),
+            (i for i, m in enumerate(sorted_msgs) if m.get("id") == before),
             len(sorted_msgs),
         )
         sorted_msgs = sorted_msgs[:cut_idx]
@@ -748,28 +635,37 @@ async def thread(
     page = sorted_msgs[-limit:] if has_more else sorted_msgs
 
     for msg in page:
-        if _msg_from(msg) == "claudie":
+        if msg.get("from") == "claudie":
             if cursor_id is None:
                 msg["status"] = "unread"
             else:
-                msg_ts = _msg_ts(msg)
-                cursor_ts = _get_cursor_ts(sorted_msgs, cursor_id)
+                msg_ts = msg.get("ts", "")
+                cursor_ts = _get_cursor_ts(sorted_msgs, cursor_id or "")
                 msg["status"] = "unread" if msg_ts > cursor_ts else "read"
         else:
             msg["status"] = "read"
 
+    # Auto-advance read cursor to last message in the page
     if page:
-        last_id = _msg_id(page[-1])
+        last_id = page[-1].get("id", "")
         if last_id and last_id != cursor_id:
             should_advance = cursor_id is None
-            if not should_advance and cursor_id is not None:
-                last_ts = _msg_ts(page[-1])
-                cursor_ts = _get_cursor_ts(sorted_msgs, cursor_id)
+            if not should_advance:
+                last_ts = page[-1].get("ts", "")
+                cursor_ts = _get_cursor_ts(sorted_msgs, cursor_id or "")
                 should_advance = last_ts > cursor_ts
             if should_advance:
                 write_cursor(username, last_id)
 
     return ThreadResponse(messages=page, has_more=has_more)
+
+
+def _get_cursor_ts(sorted_msgs: list[dict[str, Any]], cursor_id: str) -> str:
+    """Get the timestamp of the cursor message."""
+    for msg in sorted_msgs:
+        if msg.get("id") == cursor_id:
+            return msg.get("ts", "")  # type: ignore[no-any-return]
+    return ""
 
 
 @router.patch("/read", response_model=ReadResponse)
@@ -781,10 +677,10 @@ async def mark_read(
     accounts = load_accounts()
     _, acct = require_session(accounts, authorization)
 
-    username = str(acct.get("username", ""))
+    username = acct["username"]
     messages = read_thread(username)
 
-    msg_exists = any(_msg_id(m) == body.last_read_id for m in messages)
+    msg_exists = any(m.get("id") == body.last_read_id for m in messages)
     if not msg_exists:
         raise HTTPException(status_code=400, detail="Invalid message ID")
 
@@ -793,10 +689,10 @@ async def mark_read(
         current_ts = ""
         new_ts = ""
         for msg in messages:
-            if _msg_id(msg) == current_cursor:
-                current_ts = _msg_ts(msg)
-            if _msg_id(msg) == body.last_read_id:
-                new_ts = _msg_ts(msg)
+            if msg.get("id") == current_cursor:
+                current_ts = msg.get("ts", "")
+            if msg.get("id") == body.last_read_id:
+                new_ts = msg.get("ts", "")
         if new_ts <= current_ts:
             return ReadResponse(last_read_id=current_cursor)
 
@@ -821,14 +717,14 @@ async def send(
     if "multipart/form-data" in content_type:
         form = await request.form()
         message = str(form.get("message", ""))
-        raw_image = form.get("image")
-        if isinstance(raw_image, UploadFile):
-            image = raw_image
+        image = form.get("image")  # type: ignore[assignment]
+        if image is not None and not isinstance(image, UploadFile):
+            image = None
     elif "application/json" in content_type:
-        body_data: object = await request.json()
-        if isinstance(body_data, dict):
-            message = str(body_data.get("message", ""))
+        body = await request.json()
+        message = body.get("message", "")
     else:
+        # Try form-urlencoded
         form = await request.form()
         message = str(form.get("message", ""))
 
@@ -838,8 +734,8 @@ async def send(
     accounts = load_accounts()
     api_key, acct = require_session(accounts, authorization)
 
-    username = str(acct.get("username", ""))
-    display_name = str(acct.get("display_name", username))
+    username = acct["username"]
+    display_name = acct.get("display_name", username)
 
     is_allowed, reason = check_message_rate_limit(api_key)
     if not is_allowed:
@@ -852,6 +748,7 @@ async def send(
             detail=f"Message exceeds {MAX_WORDS} words (submitted: {word_count})",
         )
 
+    injection = None
     if message:
         moderation = await moderate_message(message, display_name)
         injection = await screen_injection(message, display_name)
@@ -897,7 +794,7 @@ async def send(
 
     now = datetime.now(UTC).isoformat()
 
-    message_obj: MessageDict = {
+    message_obj: dict[str, object] = {
         "id": msg_id,
         "from": username,
         "ts": now,
@@ -920,7 +817,15 @@ async def send(
     return SendResponse(
         id=msg_id,
         word_count=word_count,
-        attachment=AttachmentInfo(**attachment_meta) if attachment_meta else None,  # type: ignore[arg-type]
+        attachment=(
+            AttachmentInfo(
+                filename=str(attachment_meta["filename"]),
+                mime=str(attachment_meta["mime"]),
+                size=int(attachment_meta["size"]),
+            )
+            if attachment_meta
+            else None
+        ),
     )
 
 
@@ -934,7 +839,7 @@ async def get_attachment(
     accounts = load_accounts()
     _, acct = require_session(accounts, authorization)
 
-    if acct.get("username") != username:
+    if acct["username"] != username:
         raise HTTPException(status_code=403, detail="Access denied")
 
     filepath = get_attachment_path(username, filename)

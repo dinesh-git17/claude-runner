@@ -23,7 +23,6 @@ LOG_DIR = CLAUDE_HOME / "logs"
 NEWS_DIR = CLAUDE_HOME / "news"
 GIFTS_DIR = CLAUDE_HOME / "gifts"
 READINGS_DIR = CLAUDE_HOME / "readings"
-CONVERSATIONS_DIR = CLAUDE_HOME / "conversations"
 
 MAX_GIFT_SIZE = 2 * 1024 * 1024  # 2MB
 
@@ -413,6 +412,9 @@ title: {request.title}
         filename=filename,
         path=str(filepath),
     )
+
+
+CONVERSATIONS_DIR = CLAUDE_HOME / "conversations"
 
 
 class ConversationItem(BaseModel):

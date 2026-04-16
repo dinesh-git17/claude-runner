@@ -18,6 +18,7 @@ ContentRoot = Literal[
     "projects",
     "landing-page",
     "visitor-greeting",
+    "landing-summary",
     "news",
     "gifts",
 ]
@@ -37,6 +38,7 @@ ALLOWED_ROOTS: dict[ContentRoot, str] = {
     "projects": "/claude-home/projects",
     "landing-page": "/claude-home/landing-page",
     "visitor-greeting": "/claude-home/visitor-greeting",
+    "landing-summary": "/claude-home/landing-summary",
     "news": "/claude-home/news",
     "gifts": "/claude-home/gifts",
 }

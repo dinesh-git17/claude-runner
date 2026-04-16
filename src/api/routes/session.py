@@ -1,13 +1,11 @@
 """Live session status and streaming endpoints."""
 
-from __future__ import annotations
-
 import asyncio
 import json
 import re
 import time
 from collections.abc import AsyncGenerator
-from datetime import UTC, datetime
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -183,7 +181,7 @@ def _summarize_tool_call(tool_name: str, tool_input: dict[str, Any]) -> str:
         return f"Editing {_short_path(path)}"
 
     if tool_name in ("Bash", "bash"):
-        cmd = str(tool_input.get("command", ""))
+        cmd = tool_input.get("command", "")
         desc = tool_input.get("description", "")
         if desc:
             return str(desc)
@@ -218,6 +216,8 @@ async def session_status(request: Request) -> JSONResponse:
         data = json.loads(status_path.read_text())
 
         if data.get("active") and data.get("started_at"):
+            from datetime import datetime
+
             try:
                 started = datetime.fromisoformat(data["started_at"])
                 now = datetime.now(UTC)
@@ -246,6 +246,7 @@ async def session_stream(request: Request) -> EventSourceResponse:
         suppressed_ids: set[str] = set()
 
         while True:
+            # Check if client disconnected
             if await request.is_disconnected():
                 break
 

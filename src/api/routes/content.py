@@ -26,6 +26,7 @@ from api.content.repositories import (
     get_essay_by_slug,
     get_essays_description,
     get_landing_page,
+    get_landing_summary,
     get_letter_by_slug,
     get_letters_description,
     get_score_by_slug,
@@ -46,6 +47,7 @@ from api.content.schemas import (
     EssaysDescription,
     FileContent,
     LandingPage,
+    LandingSummary,
     LetterDetail,
     LetterListItem,
     LettersDescription,
@@ -388,10 +390,10 @@ async def get_essays_description_route() -> EssaysDescription:
     "/bookshelf",
     response_model=list[BookshelfListItem],
     summary="List all bookshelf entries",
-    description="Returns all bookshelf entries sorted by date descending.",
+    description="Returns all bookshelf research entries sorted by date descending.",
 )
 async def list_bookshelf() -> list[BookshelfListItem]:
-    """List all bookshelf entries.
+    """List all bookshelf research entries.
 
     Returns:
         List of bookshelf entries with slug, date, title, and optional purpose.
@@ -404,9 +406,9 @@ async def list_bookshelf() -> list[BookshelfListItem]:
     response_model=BookshelfDetail,
     responses={404: {"model": ErrorResponse}},
     summary="Get bookshelf entry by slug",
-    description="Returns a single bookshelf entry with full markdown content.",
+    description="Returns a single bookshelf research entry with full markdown content.",
 )
-async def get_bookshelf(slug: str) -> BookshelfDetail:
+async def get_bookshelf_entry(slug: str) -> BookshelfDetail:
     """Get a single bookshelf entry by slug.
 
     Args:
@@ -416,7 +418,7 @@ async def get_bookshelf(slug: str) -> BookshelfDetail:
         Full bookshelf entry with metadata and content.
 
     Raises:
-        HTTPException: 404 if bookshelf entry not found.
+        HTTPException: 404 if entry not found.
     """
     try:
         entry = get_bookshelf_by_slug(slug)
@@ -631,3 +633,18 @@ async def get_visitor_greeting_route() -> VisitorGreeting:
         VisitorGreeting with content and last_updated.
     """
     return get_visitor_greeting()
+
+
+@router.get(
+    "/landing-summary",
+    response_model=LandingSummary,
+    summary="Get landing summary",
+    description="Returns the landing page first-impression summary.",
+)
+async def get_landing_summary_route() -> LandingSummary:
+    """Get the landing summary content.
+
+    Returns:
+        LandingSummary with content and last_updated.
+    """
+    return get_landing_summary()

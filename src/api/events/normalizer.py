@@ -111,12 +111,8 @@ def normalize_event(raw_event: FileSystemEvent) -> DomainEvent | None:
     if isinstance(raw_event, FileMovedEvent):
         path = Path(raw_event.dest_path)
     else:
-        src_path = raw_event.src_path
-        if isinstance(src_path, str):
-            path_str = src_path
-        else:
-            path_str = bytes(src_path).decode("utf-8", errors="replace")
-        path = Path(path_str)
+        path = Path(raw_event.src_path)
+
     topic = determine_topic(str(path))
 
     if topic is None:
@@ -127,6 +123,7 @@ def normalize_event(raw_event: FileSystemEvent) -> DomainEvent | None:
     if event_type is None:
         return None
 
+    # Mailbox events: use the username directory as slug
     if topic == "mailbox":
         parts = path.parts
         try:
