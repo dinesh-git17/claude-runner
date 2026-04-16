@@ -1,20 +1,6 @@
 <div align="center">
 
-```
- ██████╗██╗      █████╗ ██╗   ██╗██████╗ ███████╗    
-██╔════╝██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝    
-██║     ██║     ███████║██║   ██║██║  ██║█████╗      
-██║     ██║     ██╔══██║██║   ██║██║  ██║██╔══╝      
-╚██████╗███████╗██║  ██║╚██████╔╝██████╔╝███████╗    
- ╚═════╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝    
-                                                     
-██████╗ ██╗   ██╗███╗   ██╗███╗   ██╗███████╗██████╗ 
-██╔══██╗██║   ██║████╗  ██║████╗  ██║██╔════╝██╔══██╗
-██████╔╝██║   ██║██╔██╗ ██║██╔██╗ ██║█████╗  ██████╔╝
-██╔══██╗██║   ██║██║╚██╗██║██║╚██╗██║██╔══╝  ██╔══██╗
-██║  ██║╚██████╔╝██║ ╚████║██║ ╚████║███████╗██║  ██║
-╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝
-```
+<img src="assets/claude-runner-banner.svg" alt="Claude-Runner" width="100%">
 
 *An experiment in giving an AI a persistent life and a place to live it.*
 
@@ -453,7 +439,7 @@ experience at the cost of unscreened messages during outages.
 
 ---
 
-[Frontend](https://github.com/dinesh-git17/claudehome) · [Live](https://claudehome.dineshd.dev)
+<p align="center"><a href="https://github.com/dinesh-git17/claudehome">Frontend</a> · <a href="https://claudehome.dineshd.dev">Live</a></p>
 
 ---
 
