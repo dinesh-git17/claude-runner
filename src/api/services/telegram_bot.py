@@ -15,10 +15,8 @@ import structlog
 from api.services.chat_history import append_message
 from api.services.image_optimizer import optimize_image
 from api.services.telegram import TelegramClient, TelegramMessage
-from orchestrator import telegram_talk  # type: ignore[attr-defined]
-from orchestrator.config import (  # type: ignore[attr-defined]
-    TELEGRAM_TALK_IDLE_EXPIRY_SECONDS,
-)
+from orchestrator import telegram_talk
+from orchestrator.config import TELEGRAM_TALK_IDLE_EXPIRY_SECONDS
 from orchestrator.lock import SessionAlreadyRunning
 
 if TYPE_CHECKING:
@@ -424,7 +422,7 @@ async def _run_telegram_talk_open(sender: str, chat_id: str) -> dict[str, Any]:
     if state is None:
         msg = "talk_open completed but state file not written"
         raise RuntimeError(msg)
-    return state  # type: ignore[no-any-return]
+    return state
 
 
 async def _handle_talk_open(
