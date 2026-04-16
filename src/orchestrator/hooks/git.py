@@ -59,7 +59,7 @@ async def run(result: SessionResult) -> HookResult:
         logger.warning("git_commit_failed", output=output)
         return HookResult("git", "failed", elapsed, output.strip())
 
-    logger.info("git_committed", message=commit_msg.split("\n", maxsplit=1)[0])
+    logger.info("git_committed", message=commit_msg.split("\n")[0])
 
     # Push
     rc, output = await _run_git("push", "origin", "main")

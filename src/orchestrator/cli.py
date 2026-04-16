@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
+import os
 import sys
+import uuid
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -12,11 +15,14 @@ from zoneinfo import ZoneInfo
 import structlog
 
 from orchestrator.config import (
+    CLAUDE_HOME,
     CONVO_DIR,
     ENV_FILE,
     LOG_DIR,
     MAX_TURNS,
     SESSION_TYPES,
+    TELEGRAM_TALK_SNAPSHOT_FILE,
+    TELEGRAM_TALK_STATE_FILE,
     TRANSCRIPT_DIR,
 )
 from orchestrator.context import (
@@ -24,12 +30,14 @@ from orchestrator.context import (
     gather_all_context,
 )
 from orchestrator.hooks import build_pipeline
+from orchestrator.hooks import git as git_hook
+from orchestrator.hooks import snapshot as snapshot_hook
 from orchestrator.hooks.snapshot import snapshot_content
 from orchestrator.lock import SessionAlreadyRunning, acquire_lock, release_lock
 from orchestrator.log import configure_logging
-from orchestrator.pipeline import run_pipeline
+from orchestrator.pipeline import Hook, run_pipeline
 from orchestrator.render import PromptRenderer
-from orchestrator.session import run_claude_session
+from orchestrator.session import extract_final_text, run_claude_session
 
 logger = structlog.get_logger()
 
@@ -92,6 +100,12 @@ async def main_async(args: argparse.Namespace) -> int:
     log_file = _setup_log_file(session_id)
     visitor_msg: str = args.message or ""
     sender_name: str = args.sender_name or "dinesh"
+
+    is_telegram_talk_open = session_type.name == "telegram_talk_open"
+    cli_session_id: str | None = str(uuid.uuid4()) if is_telegram_talk_open else None
+    telegram_talk_chat_id: str = (
+        os.environ.get("TELEGRAM_TALK_CHAT_ID", "") if is_telegram_talk_open else ""
+    )
 
     # Ensure directories exist
     for d in (LOG_DIR, CONVO_DIR, TRANSCRIPT_DIR):
@@ -159,6 +173,14 @@ async def main_async(args: argparse.Namespace) -> int:
         # Snapshot content before session
         before_snapshot = snapshot_content()
 
+        # Snapshot visitors present at session start — the visitors_archive
+        # hook will sweep exactly these files after the session, leaving any
+        # mid-session arrivals untouched for the next run.
+        visitors_dir = CLAUDE_HOME / "visitors"
+        visitors_at_start: list[Path] = (
+            sorted(visitors_dir.glob("*.md")) if visitors_dir.exists() else []
+        )
+
         # Save conversation prompt (for session types that track conversations)
         convo_file: Path | None = None
         if session_type.save_conversation and visitor_msg:
@@ -181,13 +203,34 @@ async def main_async(args: argparse.Namespace) -> int:
             session_id=session_id,
             log_file=log_file,
             max_turns=args.max_turns,
+            cli_session_id=cli_session_id,
         )
         result.convo_file = convo_file
         result.before_snapshot = before_snapshot
+        result.visitors_at_start = visitors_at_start
 
-        # Run post-session pipeline
-        hooks = build_pipeline()
-        await run_pipeline(hooks, result)
+        # For telegram_talk_open: capture greeting before the stream file is cleaned,
+        # then run a minimal pipeline (revalidation + git). The talk itself is
+        # live afterwards — mood/resonance/etc. run at /end-talk instead.
+        if is_telegram_talk_open:
+            greeting, _claude_sid = extract_final_text(result.stream_file)
+            hooks = [
+                Hook("revalidation", [], snapshot_hook.run),
+                Hook("git", ["revalidation"], git_hook.run),
+            ]
+            await run_pipeline(hooks, result)
+
+            _write_telegram_talk_state(
+                session_id=cli_session_id or "",
+                chat_id=telegram_talk_chat_id,
+                sender=sender_name,
+                greeting=greeting,
+            )
+            _write_telegram_talk_snapshot(before_snapshot)
+        else:
+            # Run full post-session pipeline
+            hooks = build_pipeline()
+            await run_pipeline(hooks, result)
 
         # Log completion
         with log_file.open("a", encoding="utf-8") as lf:
@@ -232,6 +275,43 @@ def _chown_claude(path: Path) -> None:
         os.chown(str(path), 0, claude_gid)
         path.chmod(0o640)
     except (KeyError, PermissionError, OSError):
+        pass
+
+
+def _write_telegram_talk_state(
+    session_id: str,
+    chat_id: str,
+    sender: str,
+    greeting: str,
+) -> None:
+    """Write telegram-talk.json state file (chmod so claude user can update it)."""
+    now = datetime.now(EST).isoformat()
+    state = {
+        "active": True,
+        "session_id": session_id,
+        "sender": sender,
+        "chat_id": chat_id,
+        "started_at": now,
+        "last_turn_at": now,
+        "greeting": greeting,
+    }
+    TELEGRAM_TALK_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    TELEGRAM_TALK_STATE_FILE.write_text(json.dumps(state), encoding="utf-8")
+    try:
+        TELEGRAM_TALK_STATE_FILE.chmod(0o664)
+    except OSError:
+        pass
+
+
+def _write_telegram_talk_snapshot(before_snapshot: dict[str, float]) -> None:
+    """Persist the pre-open snapshot so /end-talk can diff against it."""
+    TELEGRAM_TALK_SNAPSHOT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    TELEGRAM_TALK_SNAPSHOT_FILE.write_text(
+        json.dumps(before_snapshot), encoding="utf-8"
+    )
+    try:
+        TELEGRAM_TALK_SNAPSHOT_FILE.chmod(0o664)
+    except OSError:
         pass
 
 
