@@ -1,5 +1,7 @@
 """SSE broadcast hub for streaming events to clients."""
+
 import asyncio
+import contextlib
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -113,7 +115,7 @@ class BroadcastHub:
                         event=event.type.value,
                         data=event.model_dump_json(),
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     heartbeat = DomainEvent(
                         id=str(uuid.uuid4()),
                         type=EventType.HEARTBEAT,
@@ -128,10 +130,8 @@ class BroadcastHub:
             pass
         finally:
             pump_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await pump_task
-            except asyncio.CancelledError:
-                pass
 
             async with self._lock:
                 self._active_connections -= 1

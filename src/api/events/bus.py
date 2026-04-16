@@ -1,4 +1,5 @@
 """In-memory event bus with topic-based pub/sub."""
+
 import asyncio
 import uuid
 from collections.abc import AsyncIterator
@@ -71,7 +72,7 @@ class EventBus:
 
         for topic in topics_to_notify:
             subscribers = self._subscribers.get(topic, {})
-            for subscriber_id, queue in list(subscribers.items()):
+            for _subscriber_id, queue in list(subscribers.items()):
                 try:
                     queue.put_nowait(event)
                     delivered += 1

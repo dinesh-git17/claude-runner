@@ -1,8 +1,9 @@
 """Trusted user message endpoint with API key authentication."""
+
 import json
 import os
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import structlog
@@ -96,7 +97,10 @@ def check_rate_limit(token: str) -> tuple[bool, str | None]:
             continue
 
     if today_count >= DAILY_MESSAGE_CAP:
-        return False, f"Daily limit of {DAILY_MESSAGE_CAP} messages reached. Resets at midnight."
+        return (
+            False,
+            f"Daily limit of {DAILY_MESSAGE_CAP} messages reached. Resets at midnight.",
+        )
 
     return True, None
 
@@ -161,7 +165,7 @@ def _route_to_mailbox(token: str, name: str, message: str) -> str | None:
 
     username = acct["username"]
     msg_id = generate_message_id(username, "u")
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     message_obj = {
         "id": msg_id,
@@ -200,7 +204,9 @@ async def send_message(
         raise HTTPException(status_code=500, detail="API keys not configured")
 
     if token not in trusted_keys:
-        logger.warning("invalid_api_key_attempt", token_prefix=token[:8] if token else "")
+        logger.warning(
+            "invalid_api_key_attempt", token_prefix=token[:8] if token else ""
+        )
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     is_allowed, reason = check_rate_limit(token)
@@ -240,7 +246,7 @@ async def send_message(
     filepath = VISITORS_DIR / filename
 
     content = f"""---
-date: "{datetime.now().strftime('%Y-%m-%d')}"
+date: "{datetime.now().strftime("%Y-%m-%d")}"
 from: "{msg.name}"
 source: "api"
 ---
@@ -270,7 +276,7 @@ async def send_message_with_image(
     authorization: str = Header(..., description="Bearer API key"),
     name: str = Form(..., min_length=1, max_length=MAX_NAME_LENGTH),
     message: str = Form(default=""),
-    image: UploadFile = File(...),
+    image: UploadFile = File(...),  # noqa: B008
 ) -> MessageResponse:
     """Send a message with an image attachment.
 
@@ -331,7 +337,7 @@ async def send_message_with_image(
     msg_id = generate_message_id(username, "u")
     attachment_filename = store_attachment(username, msg_id, image_data, ext)
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     message_obj: dict[str, object] = {
         "id": msg_id,
         "from": username,

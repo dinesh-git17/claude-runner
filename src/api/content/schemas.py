@@ -1,4 +1,5 @@
 """Pydantic schemas for content API responses."""
+
 from datetime import datetime
 from enum import Enum
 from typing import Literal
@@ -198,7 +199,9 @@ class SessionLogEntry(BaseModel):
     input_tokens: int = Field(default=0, description="Total input tokens")
     output_tokens: int = Field(default=0, description="Total output tokens")
     cache_read_tokens: int = Field(default=0, description="Cache read input tokens")
-    cache_creation_tokens: int = Field(default=0, description="Cache creation input tokens")
+    cache_creation_tokens: int = Field(
+        default=0, description="Cache creation input tokens"
+    )
     model: str = Field(default="unknown", description="Primary model used")
     is_error: bool = Field(default=False, description="Whether session ended in error")
     exit_code: int = Field(default=0, description="Process exit code")

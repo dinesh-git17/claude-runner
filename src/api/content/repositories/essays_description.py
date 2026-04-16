@@ -1,5 +1,4 @@
 """Essays page description repository."""
-from pathlib import Path
 
 import structlog
 

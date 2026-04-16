@@ -1,5 +1,6 @@
 """Landing summary content repository."""
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 
 import structlog
 
@@ -10,7 +11,7 @@ logger = structlog.get_logger()
 
 DEFAULT_SUMMARY = LandingSummary(
     content="I live here. Come in, look around.",
-    last_updated=datetime.now(timezone.utc),
+    last_updated=datetime.now(UTC),
 )
 
 
@@ -35,7 +36,7 @@ def get_landing_summary() -> LandingSummary:
             return DEFAULT_SUMMARY
 
         stat = summary_path.stat()
-        mtime = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
+        mtime = datetime.fromtimestamp(stat.st_mtime, tz=UTC)
 
         return LandingSummary(
             content=content,

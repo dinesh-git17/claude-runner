@@ -1,25 +1,31 @@
 """Private mailbox system for trusted API key holders."""
+
 import grp
 import hashlib
 import json
 import os
 import re
 import secrets
-import time
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
 import shutil
+import time
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import bcrypt
 import structlog
-from fastapi import APIRouter, Header, HTTPException, Request
+from fastapi import APIRouter, Header, HTTPException, Request, UploadFile
 from fastapi.responses import Response
-from fastapi import File, Form, UploadFile
 from pydantic import BaseModel, Field, field_validator
 
+from api.services.attachments import (
+    get_attachment_path,
+    get_mime_type,
+    sanitize_image,
+    store_attachment,
+    validate_image,
+)
 from api.services.moderator import log_moderation, moderate_message, screen_injection
-from api.services.attachments import get_attachment_path, get_mime_type, sanitize_image, store_attachment, validate_image
 
 logger = structlog.get_logger()
 
@@ -44,6 +50,7 @@ def _set_claude_group(path: Path) -> None:
         path.chmod(0o664 if path.is_file() else 0o775)
     except (KeyError, OSError):
         pass
+
 
 RATE_LIMIT_FILE = Path("/claude-home/data/api-rate-limits.json")
 USERNAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{0,18}[a-z0-9]$")
@@ -72,7 +79,7 @@ def save_accounts(accounts: dict[str, Any]) -> None:
     ACCOUNTS_FILE.parent.mkdir(parents=True, exist_ok=True)
     tmp = ACCOUNTS_FILE.with_suffix(".tmp")
     tmp.write_text(json.dumps(accounts, indent=2))
-    os.replace(str(tmp), str(ACCOUNTS_FILE))
+    tmp.replace(ACCOUNTS_FILE)
 
 
 def get_trusted_keys() -> set[str]:
@@ -96,7 +103,7 @@ def find_account_by_session(
 ) -> tuple[str, dict[str, Any]] | None:
     """Find account by session token, returning (api_key, account_data)."""
     token_hash = hashlib.sha256(token.encode()).hexdigest()
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
     for api_key, acct in accounts.items():
         sessions = acct.get("sessions", {})
         sess = sessions.get(token_hash)
@@ -212,7 +219,7 @@ def write_cursor(username: str, last_read_id: str) -> None:
     cursor_path = cursor_dir / "cursor.json"
     tmp = cursor_path.with_suffix(".tmp")
     tmp.write_text(json.dumps({"last_read_id": last_read_id}))
-    os.replace(str(tmp), str(cursor_path))
+    tmp.replace(cursor_path)
     _set_claude_group(cursor_path)
 
 
@@ -223,7 +230,7 @@ def generate_message_id(username: str, prefix: str) -> str:
         username: The mailbox owner.
         prefix: 'u' for user messages, 'c' for claudie messages.
     """
-    today = datetime.now(timezone.utc).strftime("%Y%m%d")
+    today = datetime.now(UTC).strftime("%Y%m%d")
     id_prefix = f"msg_{today}_{prefix}_"
     messages = read_thread(username)
     count = sum(1 for m in messages if m.get("id", "").startswith(id_prefix))
@@ -311,7 +318,9 @@ def record_message_usage(api_key: str) -> None:
     now = datetime.now()
     cutoff = now - timedelta(hours=24)
     pruned = [
-        ts for ts in timestamps if _safe_parse_iso(ts) is not None and _safe_parse_iso(ts) >= cutoff  # type: ignore[operator]
+        ts
+        for ts in timestamps
+        if _safe_parse_iso(ts) is not None and _safe_parse_iso(ts) >= cutoff  # type: ignore[operator]
     ]
     pruned.append(now.isoformat())
     limits[api_key] = pruned
@@ -463,7 +472,7 @@ async def register(
         "username": body.username,
         "display_name": body.display_name,
         "web_password_hash": password_hash,
-        "registered": datetime.now(timezone.utc).isoformat(),
+        "registered": datetime.now(UTC).isoformat(),
         "sessions": {},
     }
     save_accounts(accounts)
@@ -547,9 +556,9 @@ async def login(body: LoginRequest, request: Request) -> LoginResponse:
 
     session_token = f"ses_{secrets.token_hex(32)}"
     token_hash = hashlib.sha256(session_token.encode()).hexdigest()
-    expires = datetime.now(timezone.utc) + timedelta(days=SESSION_TTL_DAYS)
+    expires = datetime.now(UTC) + timedelta(days=SESSION_TTL_DAYS)
 
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
     sessions = matched_acct.get("sessions", {})
     matched_acct["sessions"] = {
         k: v for k, v in sessions.items() if v.get("expires", "") > now_iso
@@ -650,9 +659,7 @@ async def thread(
     return ThreadResponse(messages=page, has_more=has_more)
 
 
-def _get_cursor_ts(
-    sorted_msgs: list[dict[str, Any]], cursor_id: str
-) -> str:
+def _get_cursor_ts(sorted_msgs: list[dict[str, Any]], cursor_id: str) -> str:
     """Get the timestamp of the cursor message."""
     for msg in sorted_msgs:
         if msg.get("id") == cursor_id:
@@ -745,7 +752,11 @@ async def send(
         moderation = await moderate_message(message, display_name)
         injection = await screen_injection(message, display_name)
         log_moderation(
-            display_name, message, moderation, source="mailbox", injection=injection,
+            display_name,
+            message,
+            moderation,
+            source="mailbox",
+            injection=injection,
         )
         if not moderation.allowed:
             raise HTTPException(
@@ -780,7 +791,7 @@ async def send(
     else:
         msg_id = generate_message_id(username, "u")
 
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(UTC).isoformat()
 
     message_obj: dict[str, object] = {
         "id": msg_id,

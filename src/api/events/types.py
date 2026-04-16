@@ -1,4 +1,5 @@
 """Domain event types for filesystem monitoring."""
+
 from datetime import datetime
 from enum import Enum
 from typing import Literal

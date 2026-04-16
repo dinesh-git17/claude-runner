@@ -1,4 +1,5 @@
 """API configuration loaded from environment variables."""
+
 from pathlib import Path
 
 from pydantic import computed_field
@@ -41,7 +42,9 @@ class Settings(BaseSettings):
     event_queue_size: int = 100
     event_max_subscribers: int = 100
     sse_heartbeat_interval: float = 15.0
-    watch_paths_raw: str = "/claude-home/thoughts,/claude-home/dreams,/claude-home/scores,/claude-home/mailbox"
+    watch_paths_raw: str = (
+        "/claude-home/thoughts,/claude-home/dreams,/claude-home/scores,/claude-home/mailbox"
+    )
 
     # Live session streaming
     session_stream_path: str = "/claude-home/data/live-stream.jsonl"
@@ -71,9 +74,7 @@ class Settings(BaseSettings):
             List of directory paths to watch for filesystem events.
         """
         return [
-            path.strip()
-            for path in self.watch_paths_raw.split(",")
-            if path.strip()
+            path.strip() for path in self.watch_paths_raw.split(",") if path.strip()
         ]
 
 

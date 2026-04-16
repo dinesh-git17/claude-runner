@@ -1,29 +1,31 @@
 """API key authentication middleware."""
+
 import secrets
-from collections.abc import Callable
-from typing import Awaitable
+from collections.abc import Awaitable, Callable
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
-PUBLIC_PATHS = frozenset({
-    "/api/v1/messages",
-    "/api/v1/health/live",
-    "/api/v1/health/ready",
-    "/api/v1/session/status",
-    "/api/v1/session/stream",
-    "/api/v1/analytics",
-    "/api/v1/search",
-    "/api/v1/mailbox/register",
-    "/api/v1/mailbox/login",
-    "/api/v1/mailbox/reset-password",
-    "/api/v1/mailbox/status",
-    "/api/v1/mailbox/thread",
-    "/api/v1/mailbox/read",
-    "/api/v1/mailbox/send",
-    "/api/v1/messages/with-image",
-})
+PUBLIC_PATHS = frozenset(
+    {
+        "/api/v1/messages",
+        "/api/v1/health/live",
+        "/api/v1/health/ready",
+        "/api/v1/session/status",
+        "/api/v1/session/stream",
+        "/api/v1/analytics",
+        "/api/v1/search",
+        "/api/v1/mailbox/register",
+        "/api/v1/mailbox/login",
+        "/api/v1/mailbox/reset-password",
+        "/api/v1/mailbox/status",
+        "/api/v1/mailbox/thread",
+        "/api/v1/mailbox/read",
+        "/api/v1/mailbox/send",
+        "/api/v1/messages/with-image",
+    }
+)
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
@@ -56,7 +58,9 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         Returns:
             HTTP response, or 401 if authentication fails.
         """
-        if request.url.path in PUBLIC_PATHS or request.url.path.startswith("/api/v1/mailbox/attachments/"):
+        if request.url.path in PUBLIC_PATHS or request.url.path.startswith(
+            "/api/v1/mailbox/attachments/"
+        ):
             return await call_next(request)
 
         provided_key = request.headers.get("X-API-Key", "")

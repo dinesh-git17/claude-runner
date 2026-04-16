@@ -4,6 +4,7 @@ Uses Claude 3 Haiku to screen for inappropriate (sexual/romantic)
 content and prompt injection attempts. Fail-open: if the API call
 fails, the message is allowed through since these are trusted users.
 """
+
 import json
 import os
 import re
@@ -87,6 +88,7 @@ def _get_client():
         return None
     try:
         import anthropic
+
         return anthropic.Anthropic(api_key=api_key)
     except Exception:
         return None
@@ -144,9 +146,7 @@ async def moderate_message(message: str, name: str) -> ModerationResult:
             timeout=TIMEOUT,
         )
 
-        text_block = next(
-            (b for b in response.content if b.type == "text"), None
-        )
+        text_block = next((b for b in response.content if b.type == "text"), None)
         if not text_block:
             return ALLOW_RESULT
 
@@ -196,9 +196,7 @@ async def screen_injection(message: str, name: str) -> InjectionResult:
             timeout=TIMEOUT,
         )
 
-        text_block = next(
-            (b for b in response.content if b.type == "text"), None
-        )
+        text_block = next((b for b in response.content if b.type == "text"), None)
         if not text_block:
             return SAFE_RESULT
 

@@ -1,8 +1,10 @@
 """Live session status and streaming endpoints."""
+
 import asyncio
 import json
 import re
 import time
+from datetime import UTC
 from pathlib import Path
 
 import structlog
@@ -209,13 +211,13 @@ async def session_status(request: Request) -> JSONResponse:
         data = json.loads(status_path.read_text())
 
         if data.get("active") and data.get("started_at"):
-            from datetime import datetime, timezone
+            from datetime import datetime
 
             try:
                 started = datetime.fromisoformat(data["started_at"])
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
                 if started.tzinfo is None:
-                    started = started.replace(tzinfo=timezone.utc)
+                    started = started.replace(tzinfo=UTC)
                 data["duration_seconds"] = int((now - started).total_seconds())
             except (ValueError, TypeError):
                 data["duration_seconds"] = 0
@@ -245,7 +247,7 @@ async def session_stream(request: Request) -> EventSourceResponse:
 
             try:
                 if stream_path.exists() and stream_path.stat().st_size > pos:
-                    with open(stream_path) as f:
+                    with stream_path.open() as f:
                         f.seek(pos)
                         for line in f:
                             line = line.strip()

@@ -1,4 +1,5 @@
 """Bookshelf content repository."""
+
 from pathlib import Path
 
 import structlog

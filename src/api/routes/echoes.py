@@ -4,11 +4,8 @@ Serves pre-computed semantic resonances from the echoes manifest,
 enabling the frontend to show related content across different types.
 """
 
-from __future__ import annotations
-
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
@@ -21,9 +18,15 @@ router = APIRouter(tags=["echoes"])
 
 MANIFEST_PATH = Path("/claude-home/runner/memory/data/echoes_manifest.json")
 
-VALID_CONTENT_TYPES = frozenset({
-    "thoughts", "dreams", "essays", "letters", "scores",
-})
+VALID_CONTENT_TYPES = frozenset(
+    {
+        "thoughts",
+        "dreams",
+        "essays",
+        "letters",
+        "scores",
+    }
+)
 
 _manifest_cache: dict[str, list[dict[str, Any]]] = {}
 _manifest_mtime: float = 0.0
@@ -55,7 +58,7 @@ def _load_manifest() -> dict[str, list[dict[str, Any]]]:
         return _manifest_cache
 
     try:
-        current_mtime = os.path.getmtime(MANIFEST_PATH)
+        current_mtime = MANIFEST_PATH.stat().st_mtime
     except OSError:
         return _manifest_cache
 

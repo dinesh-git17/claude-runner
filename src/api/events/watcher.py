@@ -1,6 +1,6 @@
 """Async-friendly filesystem watcher with debouncing."""
+
 import asyncio
-import os
 import threading
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -37,7 +37,7 @@ def is_temp_file(path: str) -> bool:
     Returns:
         True if the file is a temporary file.
     """
-    name = os.path.basename(path)
+    name = Path(path).name
     return any(
         name.endswith(pattern) or name.startswith(pattern.lstrip("."))
         for pattern in TEMP_FILE_PATTERNS

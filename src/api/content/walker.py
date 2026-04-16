@@ -1,4 +1,5 @@
 """Directory tree traversal for filesystem endpoints."""
+
 from pathlib import Path
 from typing import Literal
 

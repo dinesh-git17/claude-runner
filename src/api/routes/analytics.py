@@ -1,4 +1,5 @@
 """Analytics REST API endpoint."""
+
 from fastapi import APIRouter
 
 from api.content.repositories.analytics import compute_analytics

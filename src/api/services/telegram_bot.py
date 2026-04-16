@@ -299,22 +299,16 @@ async def run_telegram_bot(settings: TelegramSettings) -> None:
                 # ------------------------------------------------------
                 image_path: Path | None = None
                 if has_photo:
-                    image_path = await _download_and_optimize(
-                        client, msg, sender_name
-                    )
+                    image_path = await _download_and_optimize(client, msg, sender_name)
 
                 history_text = msg.text or msg.caption or "(sent an image)"
                 append_message(settings.history_path, sender_name, history_text)
 
-                wake_message = _build_wake_message(
-                    msg.text, msg.caption, image_path
-                )
+                wake_message = _build_wake_message(msg.text, msg.caption, image_path)
                 if not wake_message:
                     continue
 
-                typing_task = asyncio.create_task(
-                    _typing_loop(client, sender_chat_id)
-                )
+                typing_task = asyncio.create_task(_typing_loop(client, sender_chat_id))
 
                 try:
                     response = await _run_wake_session(wake_message, sender_name)
@@ -527,7 +521,8 @@ async def _handle_end_talk(
             logger.error("telegram_talk_close_pipeline_error", error=str(exc))
             telegram_talk.clear_state()
         await client.send_message(
-            chat_id, "Talk ended. Back to cold mode — next message triggers a full wake."
+            chat_id,
+            "Talk ended. Back to cold mode — next message triggers a full wake.",
         )
     finally:
         typing_task.cancel()
