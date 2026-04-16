@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import json
 import os
 import sys
@@ -297,10 +298,8 @@ def _write_telegram_talk_state(
     }
     TELEGRAM_TALK_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
     TELEGRAM_TALK_STATE_FILE.write_text(json.dumps(state), encoding="utf-8")
-    try:
+    with contextlib.suppress(OSError):
         TELEGRAM_TALK_STATE_FILE.chmod(0o664)
-    except OSError:
-        pass
 
 
 def _write_telegram_talk_snapshot(before_snapshot: dict[str, float]) -> None:
@@ -309,10 +308,8 @@ def _write_telegram_talk_snapshot(before_snapshot: dict[str, float]) -> None:
     TELEGRAM_TALK_SNAPSHOT_FILE.write_text(
         json.dumps(before_snapshot), encoding="utf-8"
     )
-    try:
+    with contextlib.suppress(OSError):
         TELEGRAM_TALK_SNAPSHOT_FILE.chmod(0o664)
-    except OSError:
-        pass
 
 
 def main() -> None:

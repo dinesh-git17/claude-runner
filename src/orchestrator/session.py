@@ -63,13 +63,13 @@ def _build_cli_command(
     sys_fd, sys_path = tempfile.mkstemp(prefix="claude-sys-", suffix=".txt")
     os.write(sys_fd, system_prompt.encode("utf-8"))
     os.close(sys_fd)
-    os.chmod(sys_path, 0o644)
+    Path(sys_path).chmod(0o644)
     tmp_files.append(Path(sys_path))
 
     usr_fd, usr_path = tempfile.mkstemp(prefix="claude-usr-", suffix=".txt")
     os.write(usr_fd, user_prompt.encode("utf-8"))
     os.close(usr_fd)
-    os.chmod(usr_path, 0o644)
+    Path(usr_path).chmod(0o644)
     tmp_files.append(Path(usr_path))
 
     cmd = [

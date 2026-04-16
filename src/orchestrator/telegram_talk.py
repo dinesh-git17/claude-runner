@@ -18,6 +18,7 @@ Public surface:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import os
 from datetime import datetime
@@ -75,9 +76,7 @@ def clear_state() -> None:
         except FileNotFoundError:
             pass
         except OSError as exc:
-            logger.warning(
-                "telegram_talk_clear_failed", path=str(path), error=str(exc)
-            )
+            logger.warning("telegram_talk_clear_failed", path=str(path), error=str(exc))
 
 
 def touch_last_turn() -> None:
@@ -87,10 +86,8 @@ def touch_last_turn() -> None:
         return
     state["last_turn_at"] = datetime.now(EST).isoformat()
     TELEGRAM_TALK_STATE_FILE.write_text(json.dumps(state), encoding="utf-8")
-    try:
+    with contextlib.suppress(OSError):
         TELEGRAM_TALK_STATE_FILE.chmod(0o664)
-    except OSError:
-        pass
 
 
 # ---------------------------------------------------------------------------
@@ -166,10 +163,8 @@ async def run_turn(session_id: str, message: str) -> str:
 
     text, _sid = extract_final_text(stream_file)
 
-    try:
+    with contextlib.suppress(OSError):
         stream_file.unlink()
-    except OSError:
-        pass
 
     if exit_code != 0:
         msg = f"talk turn exited with code {exit_code}"
@@ -236,7 +231,7 @@ def _synthesize_conversation_file(state: dict) -> Path | None:
     # Include the greeting as the opening entry if we have one
     greeting = state.get("greeting", "")
     if greeting:
-        body_lines.append(f"## Claudie (opening greeting)")
+        body_lines.append("## Claudie (opening greeting)")
         body_lines.append("")
         body_lines.append(greeting)
         body_lines.append("")
@@ -253,10 +248,8 @@ def _synthesize_conversation_file(state: dict) -> Path | None:
 
     CONVO_DIR.mkdir(parents=True, exist_ok=True)
     convo_file.write_text("\n".join(body_lines), encoding="utf-8")
-    try:
+    with contextlib.suppress(OSError):
         convo_file.chmod(0o664)
-    except OSError:
-        pass
     return convo_file
 
 

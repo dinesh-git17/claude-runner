@@ -10,7 +10,9 @@ from orchestrator.hooks import (
     git,
     graph_update,
     memory_index,
-    mirror as mirror_hook,
+)
+from orchestrator.hooks import mirror as mirror_hook
+from orchestrator.hooks import (
     mood,
     resonance,
     snapshot,

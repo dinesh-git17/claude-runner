@@ -19,7 +19,9 @@ from orchestrator.pipeline import HookResult
 logger = structlog.get_logger()
 
 COMPILED_MEMORY_FILE = DATA_DIR / "compiled-memory.md"
-COMPILE_PROMPT_FILE = Path(__file__).parent.parent / "prompts" / "compile_memory_prompt.md"
+COMPILE_PROMPT_FILE = (
+    Path(__file__).parent.parent / "prompts" / "compile_memory_prompt.md"
+)
 MEMORY_DIR = CLAUDE_HOME / "memory"
 TOKEN_BUDGET = 8000
 CHAR_BUDGET = TOKEN_BUDGET * 4

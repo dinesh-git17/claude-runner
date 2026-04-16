@@ -24,7 +24,9 @@ async def run(result: SessionResult) -> HookResult:
             data = json.loads(MIRROR_SNAPSHOT_FILE.read_text(encoding="utf-8"))
             computed_at = data.get("computed_at", "")
             if computed_at:
-                computed_date = datetime.fromisoformat(computed_at).astimezone(TZ_EST).date()
+                computed_date = (
+                    datetime.fromisoformat(computed_at).astimezone(TZ_EST).date()
+                )
                 today = datetime.now(TZ_EST).date()
                 age = (today - computed_date).days
                 if age < CADENCE_DAYS:

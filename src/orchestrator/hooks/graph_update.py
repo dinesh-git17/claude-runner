@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import time
+from typing import TYPE_CHECKING
 
 import structlog
 
-from orchestrator.config import SessionResult
 from orchestrator.pipeline import HookResult
+
+if TYPE_CHECKING:
+    from orchestrator.config import SessionResult
 
 logger = structlog.get_logger()
 

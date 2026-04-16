@@ -19,26 +19,26 @@ import structlog
 
 from orchestrator.config import (
     CLAUDE_HOME,
+    COMPILED_MEMORY_FILE,
     CONTENT_DIRECTORIES,
     CONVO_DIR,
     DAY_ZERO,
     DAYLIGHT_PREV_FILE,
     DRIFT_SIGNALS_FILE,
+    IDENTITY_FILE,
     IMPULSES_FILE,
     INNER_THREAD_FILE,
     MAILBOX_ACCOUNTS_FILE,
     MAILBOX_DIR,
-    COMPILED_MEMORY_FILE,
-    IDENTITY_FILE,
     MEMORY_FILE,
     MIRROR_SNAPSHOT_FILE,
     MOOD_STATE_FILE,
-    VOICE_FILE,
     PROMPT_FILE,
     RUNNER_DIR,
     SCHEDULED_SESSION_NAMES,
     SUMMARY_DIRECTORIES,
     TELEGRAM_HISTORY_FILE,
+    VOICE_FILE,
     SessionType,
 )
 
@@ -780,7 +780,10 @@ def build_impulse_context() -> str:
 
     urgency_rank = {"high": 3, "medium": 2, "low": 1}
     pending.sort(
-        key=lambda i: (-urgency_rank.get(i.get("urgency", "low"), 1), i.get("created_at", "")),
+        key=lambda i: (
+            -urgency_rank.get(i.get("urgency", "low"), 1),
+            i.get("created_at", ""),
+        ),
     )
     strongest = pending[0]
 
@@ -817,6 +820,7 @@ def build_mirror_context() -> str:
 
     try:
         from datetime import date as _date
+
         computed_date = _date.fromisoformat(computed)
         today = datetime.now(EST).date()
         age = (today - computed_date).days
