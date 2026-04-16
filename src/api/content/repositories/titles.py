@@ -40,7 +40,7 @@ def _load_registry() -> RegistryData:
         return initial
 
     with REGISTRY_PATH.open(encoding="utf-8") as f:
-        return json.load(f)
+        return json.load(f)  # type: ignore[no-any-return]
 
 
 def _save_registry(data: RegistryData) -> None:

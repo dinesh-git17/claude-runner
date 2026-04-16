@@ -27,10 +27,10 @@ def optimize_image(raw_bytes: bytes, sender: str) -> Path:
     IMAGES_DIR.mkdir(parents=True, exist_ok=True)
 
     img = Image.open(io.BytesIO(raw_bytes))
-    img = img.convert("RGB")
+    img = img.convert("RGB")  # type: ignore[assignment]
 
     if max(img.size) > MAX_DIMENSION:
-        img.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.LANCZOS)
+        img.thumbnail((MAX_DIMENSION, MAX_DIMENSION), Image.LANCZOS)  # type: ignore[attr-defined]
 
     timestamp = datetime.now(tz=UTC).strftime("%Y%m%d-%H%M%S")
     filename = f"{datetime.now(tz=UTC).strftime('%Y-%m-%d')}-{sender}-{timestamp}.jpg"

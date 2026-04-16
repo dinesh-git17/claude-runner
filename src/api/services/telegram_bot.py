@@ -8,15 +8,17 @@ import fcntl
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import structlog
 
 from api.services.chat_history import append_message
 from api.services.image_optimizer import optimize_image
 from api.services.telegram import TelegramClient, TelegramMessage
-from orchestrator import telegram_talk
-from orchestrator.config import TELEGRAM_TALK_IDLE_EXPIRY_SECONDS
+from orchestrator import telegram_talk  # type: ignore[attr-defined]
+from orchestrator.config import (  # type: ignore[attr-defined]
+    TELEGRAM_TALK_IDLE_EXPIRY_SECONDS,
+)
 from orchestrator.lock import SessionAlreadyRunning
 
 if TYPE_CHECKING:
@@ -390,7 +392,7 @@ async def _run_wake_session(message: str, sender: str) -> str:
     return _extract_response(CONVERSATIONS_DIR)
 
 
-async def _run_telegram_talk_open(sender: str, chat_id: str) -> dict:
+async def _run_telegram_talk_open(sender: str, chat_id: str) -> dict[str, Any]:
     """Spawn wake.sh telegram_talk_open, wait for completion, return state.
 
     Retries once on session lock contention. Raises RuntimeError on failure.
@@ -422,7 +424,7 @@ async def _run_telegram_talk_open(sender: str, chat_id: str) -> dict:
     if state is None:
         msg = "talk_open completed but state file not written"
         raise RuntimeError(msg)
-    return state
+    return state  # type: ignore[no-any-return]
 
 
 async def _handle_talk_open(
@@ -530,7 +532,7 @@ async def _handle_end_talk(
             await typing_task
 
 
-def _is_talk_expired(state: dict) -> tuple[bool, int]:
+def _is_talk_expired(state: dict[str, Any]) -> tuple[bool, int]:
     """Return (expired, age_seconds) based on TELEGRAM_TALK_IDLE_EXPIRY_SECONDS."""
     last_str = state.get("last_turn_at") or state.get("started_at") or ""
     if not last_str:

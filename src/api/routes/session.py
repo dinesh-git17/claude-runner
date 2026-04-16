@@ -4,8 +4,10 @@ import asyncio
 import json
 import re
 import time
+from collections.abc import AsyncGenerator
 from datetime import UTC
 from pathlib import Path
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, Request
@@ -40,7 +42,7 @@ def _redact_secrets(text: str) -> str:
     return text
 
 
-def _check_suppression(raw: dict, suppressed_ids: set[str]) -> bool:
+def _check_suppression(raw: dict[str, Any], suppressed_ids: set[str]) -> bool:
     """Check if a raw stream event should be suppressed.
 
     Tracks tool_use IDs for Read calls targeting private paths,
@@ -77,7 +79,7 @@ def _check_suppression(raw: dict, suppressed_ids: set[str]) -> bool:
     return False
 
 
-def _parse_stream_event(raw: dict) -> dict | None:
+def _parse_stream_event(raw: dict[str, Any]) -> dict[str, Any] | None:
     """Parse a raw stream-json line into a filtered SSE event.
 
     Returns None if the event should be skipped.
@@ -161,7 +163,7 @@ def _parse_stream_event(raw: dict) -> dict | None:
     return None
 
 
-def _summarize_tool_call(tool_name: str, tool_input: dict) -> str:
+def _summarize_tool_call(tool_name: str, tool_input: dict[str, Any]) -> str:
     """Create a human-readable summary of a tool call."""
     if tool_name in ("Read", "read"):
         path = tool_input.get("file_path", tool_input.get("path", ""))
@@ -179,7 +181,7 @@ def _summarize_tool_call(tool_name: str, tool_input: dict) -> str:
         cmd = tool_input.get("command", "")
         desc = tool_input.get("description", "")
         if desc:
-            return desc
+            return str(desc)
         return f"Running: {cmd[:80]}"
 
     if tool_name in ("Glob", "glob"):
@@ -235,7 +237,7 @@ async def session_stream(request: Request) -> EventSourceResponse:
     stream_path = Path(settings.session_stream_path)
     poll_interval = settings.session_poll_interval
 
-    async def _generate():
+    async def _generate() -> AsyncGenerator[ServerSentEvent, None]:
         pos = 0
         heartbeat_counter = 0
         suppressed_ids: set[str] = set()

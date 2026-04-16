@@ -3,6 +3,7 @@
 import json
 import re
 from pathlib import Path
+from typing import Any
 
 import structlog
 
@@ -51,7 +52,7 @@ def _parse_log_file(path: Path) -> SessionLogEntry | None:
             break
 
     # Find the JSON result blob
-    result_data: dict | None = None
+    result_data: dict[str, Any] | None = None
     for line in lines:
         if '"type":"result"' in line:
             try:

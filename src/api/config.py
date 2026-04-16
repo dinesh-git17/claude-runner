@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     session_status_path: str = "/claude-home/data/session-status.json"
     session_poll_interval: float = 0.2
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def cors_origins(self) -> list[str]:
         """Parse CORS origins from comma-separated string.
@@ -65,7 +65,7 @@ class Settings(BaseSettings):
             if origin.strip()
         ]
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def watch_paths(self) -> list[str]:
         """Parse watch paths from comma-separated string.
@@ -102,7 +102,7 @@ class TelegramSettings(BaseSettings):
     poll_timeout: int = 30
     authorized_users_raw: str = ""
 
-    @computed_field
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def authorized_users(self) -> dict[str, str]:
         """Parse authorized users from comma-separated name:chat_id pairs.

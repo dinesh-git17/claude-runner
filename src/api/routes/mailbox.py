@@ -301,7 +301,8 @@ def check_message_rate_limit(api_key: str) -> tuple[bool, str | None]:
     today_count = sum(
         1
         for ts in timestamps
-        if _safe_parse_iso(ts) is not None and _safe_parse_iso(ts) >= today_start  # type: ignore[operator]
+        for parsed in [_safe_parse_iso(ts)]
+        if parsed is not None and parsed >= today_start
     )
     if today_count >= DAILY_MESSAGE_CAP:
         return (
@@ -639,7 +640,7 @@ async def thread(
                 msg["status"] = "unread"
             else:
                 msg_ts = msg.get("ts", "")
-                cursor_ts = _get_cursor_ts(sorted_msgs, cursor_id)
+                cursor_ts = _get_cursor_ts(sorted_msgs, cursor_id or "")
                 msg["status"] = "unread" if msg_ts > cursor_ts else "read"
         else:
             msg["status"] = "read"
@@ -651,7 +652,7 @@ async def thread(
             should_advance = cursor_id is None
             if not should_advance:
                 last_ts = page[-1].get("ts", "")
-                cursor_ts = _get_cursor_ts(sorted_msgs, cursor_id)
+                cursor_ts = _get_cursor_ts(sorted_msgs, cursor_id or "")
                 should_advance = last_ts > cursor_ts
             if should_advance:
                 write_cursor(username, last_id)
@@ -663,7 +664,7 @@ def _get_cursor_ts(sorted_msgs: list[dict[str, Any]], cursor_id: str) -> str:
     """Get the timestamp of the cursor message."""
     for msg in sorted_msgs:
         if msg.get("id") == cursor_id:
-            return msg.get("ts", "")
+            return msg.get("ts", "")  # type: ignore[no-any-return]
     return ""
 
 
@@ -816,7 +817,15 @@ async def send(
     return SendResponse(
         id=msg_id,
         word_count=word_count,
-        attachment=AttachmentInfo(**attachment_meta) if attachment_meta else None,
+        attachment=(
+            AttachmentInfo(
+                filename=str(attachment_meta["filename"]),
+                mime=str(attachment_meta["mime"]),
+                size=int(attachment_meta["size"]),
+            )
+            if attachment_meta
+            else None
+        ),
     )
 
 

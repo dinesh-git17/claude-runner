@@ -10,6 +10,7 @@ import os
 import re
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import structlog
 from pydantic import BaseModel
@@ -81,7 +82,7 @@ ALLOW_RESULT = ModerationResult(allowed=True, reason="approved")
 SAFE_RESULT = InjectionResult(safe=True, threat="none", detail="no injection detected")
 
 
-def _get_client():
+def _get_client() -> Any:
     """Lazy-initialize the Anthropic client."""
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
@@ -98,7 +99,7 @@ _client_instance = None
 _client_initialized = False
 
 
-def _client():
+def _client() -> Any:
     """Singleton Anthropic client."""
     global _client_instance, _client_initialized  # noqa: PLW0603
     if not _client_initialized:
@@ -107,13 +108,13 @@ def _client():
     return _client_instance
 
 
-def _extract_json(text: str) -> dict | None:
+def _extract_json(text: str) -> dict[str, Any] | None:
     """Extract first JSON object from text."""
     match = re.search(r"\{[\s\S]*\}", text)
     if not match:
         return None
     try:
-        return json.loads(match.group(0))
+        return json.loads(match.group(0))  # type: ignore[no-any-return]
     except json.JSONDecodeError:
         return None
 
@@ -240,7 +241,7 @@ def log_moderation(
     filename = f"{timestamp.strftime('%Y-%m-%d-%H%M%S')}-api.json"
     filepath = MODERATION_DIR / filename
 
-    log_data: dict = {
+    log_data: dict[str, Any] = {
         "timestamp": timestamp.isoformat(),
         "source": source,
         "name": name,

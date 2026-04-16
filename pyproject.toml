@@ -139,6 +139,14 @@ ignore_errors = true
 module = ["orchestrator", "orchestrator.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["bcrypt"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["memory.*"]
+ignore_errors = true
+
 [tool.pydantic-mypy]
 init_forbid_extra = true
 init_typed = true

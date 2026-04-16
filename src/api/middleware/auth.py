@@ -41,7 +41,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             app: ASGI application.
             api_key: Expected API key value.
         """
-        super().__init__(app)
+        super().__init__(app)  # type: ignore[arg-type]
         self._api_key = api_key
 
     async def dispatch(

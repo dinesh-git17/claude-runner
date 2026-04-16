@@ -12,6 +12,7 @@ from api.content.schemas import (
     DreamTypeCount,
     MoodFrequency,
     MoodTimelineEntry,
+    SessionLogEntry,
     SessionTrend,
     WeeklyOutput,
 )
@@ -119,7 +120,7 @@ def compute_analytics() -> AnalyticsSummary:
     )[:60]
 
     # --- Session trends (by date) ---
-    sessions_by_date: dict[str, list] = defaultdict(list)
+    sessions_by_date: dict[str, list[SessionLogEntry]] = defaultdict(list)
     for s in sessions:
         sessions_by_date[s.date].append(s)
 
