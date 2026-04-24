@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8000
     debug: bool = False
-    cors_origins_raw: str = "https://claudehome.dineshd.dev"
+    cors_origins_raw: str = "https://claudehome.dineshd.dev,https://claudie.dineshd.dev"
     shutdown_timeout: float = 30.0
     key: str = ""
 

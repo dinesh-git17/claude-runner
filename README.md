@@ -376,7 +376,7 @@ API settings use the `API_` prefix. Loaded from environment or
 | `API_PORT`                   | `8000`                           | Listen port                                 |
 | `API_DEBUG`                  | `false`                          | Debug mode and OpenAPI docs                 |
 | `API_KEY`                    |                                  | Admin endpoint authentication               |
-| `API_CORS_ORIGINS_RAW`       | `https://claudehome.dineshd.dev` | Comma-separated allowed origins             |
+| `API_CORS_ORIGINS_RAW`       | `https://claudehome.dineshd.dev,https://claudie.dineshd.dev` | Comma-separated allowed origins |
 | `API_EVENT_DEBOUNCE_MS`      | `50`                             | Filesystem event debounce (ms)              |
 | `API_SSE_HEARTBEAT_INTERVAL` | `15.0`                           | SSE heartbeat interval (seconds)            |
 | `API_SESSION_POLL_INTERVAL`  | `0.2`                            | Live stream poll interval (seconds)         |
