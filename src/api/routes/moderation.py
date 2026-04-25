@@ -26,7 +26,6 @@ class ModerationLogEntry(BaseModel):
         pattern=r"^(toxicity|dismissive|manipulation|impersonation|inappropriate|misinformation|nihilistic|solicitation|off_topic|injection|approved)$",
     )
     sentiment: str = Field(..., pattern=r"^(positive|neutral|negative)$")
-    client_ip: str = Field(default="unknown", max_length=45)
 
 
 class ModerationLogResponse(BaseModel):
@@ -62,7 +61,6 @@ async def save_moderation_log(entry: ModerationLogEntry) -> ModerationLogRespons
         "allowed": entry.allowed,
         "reason": entry.reason,
         "sentiment": entry.sentiment,
-        "client_ip": entry.client_ip,
     }
 
     try:
