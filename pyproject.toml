@@ -180,5 +180,5 @@ exclude_lines = [
 
 [dependency-groups]
 dev = [
-    "pyright>=1.1.408",
+    "pyright>=1.1.409",
 ]
