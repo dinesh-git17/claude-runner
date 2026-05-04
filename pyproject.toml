@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-memory = ["faiss-cpu>=1.7.0", "sentence-transformers>=5.4.1", "numpy>=1.24.0"]
+memory = ["faiss-cpu>=1.7.0", "sentence-transformers>=5.4.1", "numpy>=2.4.4"]
 web = ["trafilatura>=2.0.0"]
 dev = [
     "pytest>=9.0.3",
